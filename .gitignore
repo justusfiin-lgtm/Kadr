@@ -1,0 +1,16 @@
+# Результаты сборки
+bin/
+obj/
+publish/
+
+# Файлы Visual Studio / VS Code
+.vs/
+.vscode/
+*.user
+
+# libmpv-2.dll весит больше 100 МБ — в Git не храним.
+# Брать из архива mpv-dev-x86_64-…7z (см. CLAUDE.md, раздел 2) и класть в lib\
+lib/*.dll
+
+# Личная папка пользователя с загрузками
+Всякое/

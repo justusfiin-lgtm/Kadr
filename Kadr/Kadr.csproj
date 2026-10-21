@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- libmpv-2.dll 64-битная, поэтому и программа только 64-битная. -->
+    <PlatformTarget>x64</PlatformTarget>
+    <AssemblyName>Kadr</AssemblyName>
+    <RootNamespace>Kadr</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Движок воспроизведения: кладётся рядом с Kadr.exe. -->
+    <None Include="..\lib\libmpv-2.dll" Link="libmpv-2.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <!-- Справка для пользователя входит в поставку. -->
+    <None Update="Горячие клавиши.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Понятная ошибка вместо падения при запуске, если движок забыли положить в lib\. -->
+  <Target Name="CheckLibmpv" BeforeTargets="Build" Condition="!Exists('..\lib\libmpv-2.dll')">
+    <Error Text="Не найден lib\libmpv-2.dll. Возьмите его из архива mpv-dev-x86_64-…7z (см. CLAUDE.md, раздел 2) и положите в папку lib рядом с Kadr.slnx." />
+  </Target>
+
+</Project>
