@@ -11,6 +11,10 @@ using static Kadr.NativeMethods;
 
 namespace Kadr;
 
+/// <summary>
+/// Окно видео — главное окно экземпляра плеера. Оно владеет окнами панели управления
+/// и плейлиста: у всех трёх одна кнопка на панели задач, сворачиваются и закрываются они вместе.
+/// </summary>
 public partial class VideoWindow : Window
 {
     /// <summary>Самое узкое окно видео (в единицах WPF, при масштабе 100% это пиксели).</summary>
@@ -19,8 +23,13 @@ public partial class VideoWindow : Window
     /// <summary>Во сколько раз меняется окно за один «щелчок» колёсика.</summary>
     private const double WheelStep = 1.1;
 
+    /// <summary>Промежуток между окнами в начальной раскладке.</summary>
+    private const double WindowGap = 8;
+
     private readonly string _filePath;
     private readonly DispatcherTimer _singleClickTimer;
+    private readonly ControlPanelWindow _panel = new();
+    private readonly PlaylistWindow _playlist = new();
     private MpvPlayer? _player;
 
     /// <summary>Ширина картинки, делённая на высоту. До открытия видео — 16:9.</summary>
@@ -32,16 +41,23 @@ public partial class VideoWindow : Window
     /// <summary>Где было окно до полноэкранного режима; null — сейчас не полный экран.</summary>
     private RECT? _windowedBounds;
 
+    /// <summary>Где были и видны ли панель и плейлист до полноэкранного режима.</summary>
+    private SavedWindow[] _satellitesBeforeFullscreen = [];
+
+    private readonly record struct SavedWindow(FloatingWindow Window, RECT Bounds, bool Visible);
+
     public VideoWindow(string filePath)
     {
         InitializeComponent();
         // Ссылки (http://…, av://…) mpv открывает сам — путь на диске из них делать нельзя.
         _filePath = filePath.Contains("://") ? filePath : Path.GetFullPath(filePath);
         Title = $"{Path.GetFileName(_filePath)} — Kadr";
+        _playlist.Folder = Path.GetDirectoryName(_filePath);
 
         _singleClickTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(GetDoubleClickTime()) };
         _singleClickTimer.Tick += (_, _) => OnSingleClick();
 
+        PlaceWindowsInitially();
         Loaded += OnLoaded;
         Closing += OnClosing;
     }
@@ -50,8 +66,31 @@ public partial class VideoWindow : Window
 
     private bool IsFullscreen => _windowedBounds is not null;
 
+    /// <summary>
+    /// Начальная раскладка (пока позиции не запоминаются — это этап 7): видео слева,
+    /// под ним панель, справа плейлист; вся группа — по центру основного монитора.
+    /// </summary>
+    private void PlaceWindowsInitially()
+    {
+        var work = SystemParameters.WorkArea;
+        var groupWidth = Width + WindowGap + _playlist.Width;
+        var groupHeight = Math.Max(Height + WindowGap + _panel.Height, _playlist.Height);
+        Left = work.Left + Math.Max(0, (work.Width - groupWidth) / 2);
+        Top = work.Top + Math.Max(0, (work.Height - groupHeight) / 2);
+
+        _panel.Left = Left;
+        _panel.Top = Top + Height + WindowGap;
+        _playlist.Left = Left + Width + WindowGap;
+        _playlist.Top = Top;
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _panel.Owner = this;
+        _playlist.Owner = this;
+        _panel.Show();
+        _playlist.Show();
+
         try
         {
             _player = new MpvPlayer(Video.Handle);
@@ -95,18 +134,19 @@ public partial class VideoWindow : Window
 
         _aspect = width / height;
         if (!IsFullscreen)
-            ResizeAroundCenter(1);
+            FitToAspect();
     }
 
     // ---------- Мышь ----------
-    // Щелчок без движения — пауза; с движением — перетаскивание окна; двойной щелчок — полный экран.
+    // Щелчок без движения — пауза (в полном экране — показать/скрыть панель);
+    // с движением — перетаскивание окна; двойной щелчок — полный экран.
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e);
         if (e.ClickCount == 2)
         {
-            // Второй щелчок двойного: отменяем отложенный одиночный (паузу).
+            // Второй щелчок двойного: отменяем отложенный одиночный.
             _singleClickTimer.Stop();
             _pressPoint = null;
             ToggleFullscreen();
@@ -143,16 +183,16 @@ public partial class VideoWindow : Window
 
         _pressPoint = null;
         ReleaseMouseCapture();
-        // Ждём, не придёт ли второй щелчок: если придёт — это двойной щелчок, а не пауза.
+        // Ждём, не придёт ли второй щелчок: если придёт — это двойной щелчок, а не одиночный.
         _singleClickTimer.Start();
     }
 
     private void OnSingleClick()
     {
         _singleClickTimer.Stop();
-        // В полноэкранном режиме щелчок будет показывать/скрывать панель управления —
-        // появится вместе с окном панели (этап 2б). Пауза там — пробелом.
-        if (!IsFullscreen)
+        if (IsFullscreen)
+            ToggleVisible(_panel);
+        else
             _player?.Command("cycle", "pause");
     }
 
@@ -167,76 +207,134 @@ public partial class VideoWindow : Window
 
     // ---------- Клавиши (полный набор — на этапе 6) ----------
 
-    protected override void OnKeyDown(KeyEventArgs e)
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
-        base.OnKeyDown(e);
-        if (e.Key == Key.Escape && IsFullscreen)
+        base.OnPreviewKeyDown(e);
+        HandleKey(e);
+    }
+
+    /// <summary>Горячие клавиши всех трёх окон: панель и плейлист передают их сюда.</summary>
+    internal void HandleKey(KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.None)
+            return;
+
+        // F10 Windows считает «системной» клавишей (как Alt), поэтому она приходит как Key.System.
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        switch (key)
         {
-            ToggleFullscreen();
-            e.Handled = true;
+            case Key.Escape when IsFullscreen:
+                ToggleFullscreen();
+                break;
+            case Key.F10:
+                Close();
+                break;
+            case Key.Tab:
+                ToggleVisible(_panel);
+                break;
+            case Key.L:
+                ToggleVisible(_playlist);
+                break;
+            default:
+                return;
         }
-        else if (e.Key == Key.System && e.SystemKey == Key.F10)
-        {
-            // F10 Windows считает «системной» клавишей (как Alt), поэтому она приходит так.
-            Close();
-            e.Handled = true;
-        }
+        e.Handled = true;
+    }
+
+    private static void ToggleVisible(Window window)
+    {
+        if (window.IsVisible)
+            window.Hide();
+        else
+            window.Show();
     }
 
     // ---------- Размер и полный экран ----------
     // Всё считаем в настоящих пикселях экрана: так проще с мониторами разного масштаба.
 
-    /// <summary>
-    /// Изменить ширину окна в <paramref name="factor"/> раз, сохранив центр и пропорции видео.
-    /// С factor = 1 просто подгоняет окно под пропорции видео.
-    /// </summary>
+    /// <summary>Колёсико: изменить окно в <paramref name="factor"/> раз, сохранив центр и пропорции видео.</summary>
     private void ResizeAroundCenter(double factor)
     {
-        var hwnd = Hwnd;
-        var bounds = GetBounds(hwnd);
-        var work = GetMonitorOf(hwnd).WorkArea;
+        var bounds = GetBounds(Hwnd);
+        var (width, height) = FitSize(bounds.Width * factor);
+        var centerX = bounds.Left + bounds.Width / 2.0;
+        var centerY = bounds.Top + bounds.Height / 2.0;
+        SetBounds(Hwnd,
+            (int)Math.Round(centerX - width / 2), (int)Math.Round(centerY - height / 2),
+            (int)Math.Round(width), (int)Math.Round(height));
+    }
+
+    /// <summary>Новое видео: подогнать высоту окна под его пропорции. Левый верхний угол остаётся на месте.</summary>
+    private void FitToAspect()
+    {
+        var bounds = GetBounds(Hwnd);
+        var (width, height) = FitSize(bounds.Width);
+        SetBounds(Hwnd, bounds.Left, bounds.Top, (int)Math.Round(width), (int)Math.Round(height));
+    }
+
+    /// <summary>Размер окна с нужной шириной и пропорциями видео, не меньше минимума и не больше экрана.</summary>
+    private (double Width, double Height) FitSize(double desiredWidth)
+    {
+        var work = GetMonitorOf(Hwnd).WorkArea;
         var minWidth = MinVideoWidth * VisualTreeHelper.GetDpi(this).DpiScaleX;
 
-        var width = Math.Max(minWidth, Math.Min(bounds.Width * factor, work.Width));
+        var width = Math.Max(minWidth, Math.Min(desiredWidth, work.Width));
         var height = width / _aspect;
         if (height > work.Height)
         {
             height = work.Height;
             width = height * _aspect;
         }
-
-        var centerX = bounds.Left + bounds.Width / 2.0;
-        var centerY = bounds.Top + bounds.Height / 2.0;
-        SetBounds(hwnd,
-            (int)Math.Round(centerX - width / 2), (int)Math.Round(centerY - height / 2),
-            (int)Math.Round(width), (int)Math.Round(height));
+        return (width, height);
     }
 
-    /// <summary>Полный экран — на том мониторе, где сейчас окно.</summary>
+    /// <summary>
+    /// Полный экран — на том мониторе, где сейчас окно. Панель и плейлист при входе прячутся,
+    /// при выходе возвращаются туда, где были, и в том же виде (показаны или скрыты).
+    /// </summary>
     private void ToggleFullscreen()
     {
-        var hwnd = Hwnd;
         if (_windowedBounds is { } saved)
         {
             _windowedBounds = null;
             BorderThickness = new Thickness(1);
-            SetBounds(hwnd, saved.Left, saved.Top, saved.Width, saved.Height);
+            SetBounds(Hwnd, saved.Left, saved.Top, saved.Width, saved.Height);
             // Пока был полный экран, могло открыться видео с другими пропорциями.
-            ResizeAroundCenter(1);
+            FitToAspect();
+
+            foreach (var (window, bounds, visible) in _satellitesBeforeFullscreen)
+            {
+                SetBounds(window.Hwnd, bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+                if (visible)
+                    window.Show();
+                else
+                    window.Hide();
+            }
         }
         else
         {
-            _windowedBounds = GetBounds(hwnd);
+            _satellitesBeforeFullscreen =
+            [
+                new(_panel, GetBounds(_panel.Hwnd), _panel.IsVisible),
+                new(_playlist, GetBounds(_playlist.Hwnd), _playlist.IsVisible),
+            ];
+            _panel.Hide();
+            _playlist.Hide();
+
+            _windowedBounds = GetBounds(Hwnd);
             BorderThickness = new Thickness(0);
-            var screen = GetMonitorOf(hwnd).Monitor;
-            SetBounds(hwnd, screen.Left, screen.Top, screen.Width, screen.Height);
+            var screen = GetMonitorOf(Hwnd).Monitor;
+            SetBounds(Hwnd, screen.Left, screen.Top, screen.Width, screen.Height);
         }
     }
 
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
         if (_player is null)
+        {
+            CloseSatellites();
             return;
+        }
 
         // mpv рисует прямо в наше окно, поэтому его нужно остановить раньше, чем окно исчезнет.
         // Останавливаем в фоновом потоке, чтобы окно не «зависло», пока mpv завершается,
@@ -246,8 +344,18 @@ public partial class VideoWindow : Window
         _player = null;
         _singleClickTimer.Stop();
         Hide();
+        _panel.Hide();
+        _playlist.Hide();
         await Task.Run(player.Dispose);
         Close();
+    }
+
+    private void CloseSatellites()
+    {
+        _panel.CloseForReal = true;
+        _playlist.CloseForReal = true;
+        _panel.Close();
+        _playlist.Close();
     }
 
     private void ShowError(string message) =>

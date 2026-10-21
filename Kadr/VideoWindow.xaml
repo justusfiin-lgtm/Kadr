@@ -3,8 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Kadr"
         Title="Kadr" Width="720" Height="405"
-        WindowStyle="None" ResizeMode="NoResize"
-        Background="#0B0B0D" BorderBrush="#3F424A" BorderThickness="1"
-        WindowStartupLocation="CenterScreen">
+        WindowStyle="None" ResizeMode="CanMinimize"
+        Background="{StaticResource VideoBackgroundBrush}"
+        BorderBrush="{StaticResource WindowBorderBrush}" BorderThickness="1"
+        WindowStartupLocation="Manual">
+    <!-- ResizeMode="CanMinimize": рамки и кнопок нет, но щелчок по кнопке на панели задач сворачивает окно. -->
     <local:VideoHost x:Name="Video" />
 </Window>

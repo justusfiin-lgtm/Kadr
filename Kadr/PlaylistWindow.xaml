@@ -1,0 +1,43 @@
+<local:FloatingWindow x:Class="Kadr.PlaylistWindow"
+                      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                      xmlns:local="clr-namespace:Kadr"
+                      Title="Плейлист — Kadr" Width="440" Height="585">
+    <DockPanel>
+        <!-- Заголовок: «Плейлист», путь к папке, кнопка закрытия (раздел 4.3). -->
+        <Border DockPanel.Dock="Top" Height="56" Padding="16,0,12,0"
+                BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Плейлист" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock x:Name="FolderText" FontSize="12" TextTrimming="CharacterEllipsis"
+                               Foreground="{StaticResource SecondaryTextBrush}" />
+                </StackPanel>
+                <Button Grid.Column="1" Width="32" Height="32" Style="{StaticResource IconButton}"
+                        ToolTip="Закрыть плейлист" Click="OnCloseClick">
+                    <Viewbox Width="18" Height="18">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M6,6 L18,18 M18,6 L6,18" StrokeThickness="2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Canvas>
+                    </Viewbox>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Подвал: «N файлов · по алфавиту» — этап 4. -->
+        <Border DockPanel.Dock="Bottom" Height="48" Padding="16,0"
+                BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0">
+            <TextBlock x:Name="SummaryText" VerticalAlignment="Center" FontSize="12"
+                       Foreground="{StaticResource SecondaryTextBrush}" />
+        </Border>
+
+        <!-- Список файлов — этап 4. -->
+        <Grid />
+    </DockPanel>
+</local:FloatingWindow>

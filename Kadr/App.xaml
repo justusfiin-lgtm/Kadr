@@ -4,5 +4,41 @@
              xmlns:local="clr-namespace:Kadr">
     <Application.Resources>
 
+        <!-- Палитра утверждённого дизайна (CLAUDE.md, раздел 4.1). Цвета берутся только отсюда. -->
+        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#1E1F23" />
+        <SolidColorBrush x:Key="VideoBackgroundBrush" Color="#0B0B0D" />
+        <SolidColorBrush x:Key="WindowBorderBrush" Color="#3F424A" />
+        <SolidColorBrush x:Key="DividerBrush" Color="#34363C" />
+        <SolidColorBrush x:Key="TextBrush" Color="#E6E7EA" />
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#A0A3AB" />
+        <SolidColorBrush x:Key="PlaylistTextBrush" Color="#D5D7DC" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#4C9BFF" />
+        <SolidColorBrush x:Key="CurrentRowBrush" Color="#26354D" />
+        <SolidColorBrush x:Key="TrackBrush" Color="#3A3D45" />
+        <SolidColorBrush x:Key="TextButtonBorderBrush" Color="#4A4D56" />
+
+        <!-- Кнопка-значок без рамки (например, × в плейлисте). Фокус не берёт, чтобы пробел
+             и другие клавиши плеера не «нажимали» её повторно. -->
+        <Style x:Key="IconButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource DividerBrush}" />
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Application.Resources>
 </Application>
