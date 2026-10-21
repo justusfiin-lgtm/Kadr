@@ -26,6 +26,9 @@ internal sealed class MpvPlayer : IDisposable
     /// <summary>Файл перестал играть: причина и текст ошибки, если она была.</summary>
     public event Action<MpvEndFileReason, string?>? EndFile;
 
+    /// <summary>Изменились параметры картинки (размер, пропорции) — например, открылось новое видео.</summary>
+    public event Action? VideoReconfig;
+
     /// <summary>mpv завершил работу сам (не через <see cref="Dispose"/>).</summary>
     public event Action? Shutdown;
 
@@ -146,6 +149,10 @@ internal sealed class MpvPlayer : IDisposable
 
                 case MpvEventId.FileLoaded:
                     Post(() => FileLoaded?.Invoke());
+                    break;
+
+                case MpvEventId.VideoReconfig:
+                    Post(() => VideoReconfig?.Invoke());
                     break;
 
                 case MpvEventId.EndFile:
