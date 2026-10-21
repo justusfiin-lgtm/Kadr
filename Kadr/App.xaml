@@ -16,28 +16,92 @@
         <SolidColorBrush x:Key="CurrentRowBrush" Color="#26354D" />
         <SolidColorBrush x:Key="TrackBrush" Color="#3A3D45" />
         <SolidColorBrush x:Key="TextButtonBorderBrush" Color="#4A4D56" />
+        <SolidColorBrush x:Key="ThumbBrush" Color="#FFFFFF" />
 
-        <!-- Кнопка-значок без рамки (например, × в плейлисте). Фокус не берёт, чтобы пробел
-             и другие клавиши плеера не «нажимали» её повторно. -->
-        <Style x:Key="IconButton" TargetType="Button">
+        <!-- Подсветка кнопок: белая «плёнка» поверх фона — при наведении и при нажатии. -->
+        <SolidColorBrush x:Key="HoverOverlayBrush" Color="#FFFFFF" />
+
+        <!-- Контур значка (линии 2 px со скруглёнными концами) цвета текста своей кнопки.
+             Значки рисуются в квадрате 24×24, как в макете, и масштабируются Viewbox'ом. -->
+        <Style x:Key="IconStroke" TargetType="Path">
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Control}}" />
+            <Setter Property="StrokeThickness" Value="2" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+        </Style>
+
+        <!-- Залитый значок (пауза, воспроизведение). -->
+        <Style x:Key="IconFill" TargetType="Path" BasedOn="{StaticResource IconStroke}">
+            <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Control}}" />
+        </Style>
+
+        <!-- Кнопки фокус не берут: иначе пробел и другие клавиши плеера «нажимали» бы их повторно. -->
+        <Style TargetType="local:IconButton">
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg" Background="Transparent" CornerRadius="6">
+                    <ControlTemplate TargetType="local:IconButton">
+                        <Grid>
+                            <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" />
+                            <Border x:Name="Overlay" Background="{StaticResource HoverOverlayBrush}" Opacity="0"
+                                    CornerRadius="{TemplateBinding CornerRadius}" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{StaticResource DividerBrush}" />
-                                <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+                                <Setter TargetName="Overlay" Property="Opacity" Value="0.08" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Overlay" Property="Opacity" Value="0.16" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Текстовая кнопка панели: «Аудио», «Субтитры», «Плейлист» (раздел 4.2). -->
+        <Style x:Key="TextButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border BorderBrush="{StaticResource TextButtonBorderBrush}" BorderThickness="1" CornerRadius="6" />
+                            <Border x:Name="Overlay" Background="{StaticResource HoverOverlayBrush}" Opacity="0" CornerRadius="6" />
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Overlay" Property="Opacity" Value="0.08" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Overlay" Property="Opacity" Value="0.16" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Всплывающие подсказки — в тёмной палитре. -->
+        <Style TargetType="ToolTip">
+            <Setter Property="Background" Value="{StaticResource PanelBackgroundBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource WindowBorderBrush}" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,4" />
         </Style>
 
     </Application.Resources>

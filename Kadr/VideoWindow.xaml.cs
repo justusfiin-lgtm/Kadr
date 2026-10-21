@@ -111,6 +111,11 @@ public partial class VideoWindow : Window
         _player.EndFile += OnEndFile;
         _player.VideoReconfig += OnVideoReconfig;
         _player.Shutdown += Close;
+
+        _panel.Attach(_player);
+        _panel.PlaylistClicked += () => ToggleVisible(_playlist);
+        // «Предыдущий»/«Следующий» — этап 4 (плейлист), «Аудио»/«Субтитры» — этап 5.
+
         _player.LoadFile(_filePath);
     }
 
@@ -342,6 +347,7 @@ public partial class VideoWindow : Window
         e.Cancel = true;
         var player = _player;
         _player = null;
+        _panel.Detach();
         _singleClickTimer.Stop();
         Hide();
         _panel.Hide();

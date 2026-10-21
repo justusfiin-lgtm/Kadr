@@ -3,6 +3,95 @@
                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                       xmlns:local="clr-namespace:Kadr"
                       Title="Панель управления — Kadr" Width="720" Height="132">
-    <!-- Кнопки, перемотка и громкость — этап 3 (CLAUDE.md, раздел 4.2). -->
-    <Grid />
+    <!-- Раскладка и размеры — по утверждённому макету (CLAUDE.md, раздел 4.2). -->
+    <StackPanel Margin="20,18">
+
+        <!-- Верхний ряд: прошедшее время — перемотка — длительность. -->
+        <DockPanel Height="32">
+            <TextBlock x:Name="ElapsedText" DockPanel.Dock="Left" Text="00:00:00" FontSize="13"
+                       VerticalAlignment="Center" Typography.NumeralAlignment="Tabular" />
+            <TextBlock x:Name="DurationText" DockPanel.Dock="Right" Text="00:00:00" FontSize="13"
+                       VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"
+                       Foreground="{StaticResource SecondaryTextBrush}" />
+            <!-- Толстая полоса: дорожка 14 px, бегунок 22 px, попадание мышью — вся высота 32 px. -->
+            <local:TrackBar x:Name="SeekBar" Margin="12,0" IsEnabled="False"
+                            TrackThickness="14" ThumbSize="22"
+                            TrackBrush="{StaticResource TrackBrush}" FillBrush="{StaticResource AccentBrush}"
+                            ThumbBrush="{StaticResource ThumbBrush}" />
+        </DockPanel>
+
+        <!-- Нижний ряд. -->
+        <DockPanel Margin="0,14,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Style="{StaticResource TextButton}" Content="Аудио" Click="OnAudioClick" />
+                <Button Style="{StaticResource TextButton}" Content="Субтитры" Margin="8,0,0,0" Click="OnSubtitlesClick" />
+                <Button Style="{StaticResource TextButton}" Content="Плейлист" Margin="8,0,0,0" Click="OnPlaylistClick" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <local:IconButton Width="40" Height="40" CornerRadius="8" ToolTip="Предыдущий файл (V)" Click="OnPreviousClick">
+                    <Viewbox Width="20" Height="20">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M19,20 L9,12 L19,4 Z M5,19 L5,5" Style="{StaticResource IconStroke}" />
+                        </Canvas>
+                    </Viewbox>
+                </local:IconButton>
+
+                <!-- Круглая кнопка «Пауза / Воспроизведение»: значок меняется по состоянию. -->
+                <local:IconButton x:Name="PlayPauseButton" Width="44" Height="44" CornerRadius="22" Margin="8,0,0,0"
+                                  Background="{StaticResource TextBrush}" Foreground="{StaticResource PanelBackgroundBrush}"
+                                  ToolTip="Пауза (Пробел)" Click="OnPlayPauseClick">
+                    <Grid>
+                        <Viewbox x:Name="PauseIcon" Width="20" Height="20">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M6,4 L10,4 L10,20 L6,20 Z M14,4 L18,4 L18,20 L14,20 Z" Style="{StaticResource IconFill}" />
+                            </Canvas>
+                        </Viewbox>
+                        <Viewbox x:Name="PlayIcon" Width="20" Height="20" Visibility="Collapsed">
+                            <Canvas Width="24" Height="24">
+                                <Path Data="M7,4 L20,12 L7,20 Z" Style="{StaticResource IconFill}" />
+                            </Canvas>
+                        </Viewbox>
+                    </Grid>
+                </local:IconButton>
+
+                <local:IconButton Width="40" Height="40" CornerRadius="8" Margin="8,0,0,0"
+                                  ToolTip="Следующий файл (B)" Click="OnNextClick">
+                    <Viewbox Width="20" Height="20">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M5,4 L15,12 L5,20 Z M19,5 L19,19" Style="{StaticResource IconStroke}" />
+                        </Canvas>
+                    </Viewbox>
+                </local:IconButton>
+
+                <local:IconButton Width="40" Height="40" CornerRadius="8" Margin="8,0,0,0"
+                                  ToolTip="Стоп" Click="OnStopClick">
+                    <Viewbox Width="20" Height="20">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M6,5 L18,5 Q19,5 19,6 L19,18 Q19,19 18,19 L6,19 Q5,19 5,18 L5,6 Q5,5 6,5 Z"
+                                  Style="{StaticResource IconStroke}" />
+                        </Canvas>
+                    </Viewbox>
+                </local:IconButton>
+
+                <!-- Громкость: значок (щелчок — выключить/включить звук) и тонкая полоса 4 px. -->
+                <local:IconButton x:Name="MuteButton" Width="28" Height="28" Margin="16,0,0,0"
+                                  Foreground="{StaticResource SecondaryTextBrush}"
+                                  ToolTip="Выключить звук (M)" Click="OnMuteClick">
+                    <Viewbox Width="20" Height="20">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M11,5 L6,9 L2,9 L2,15 L6,15 L11,19 Z" Style="{StaticResource IconStroke}" />
+                            <Path x:Name="SoundWave" Data="M15.5,8.5 A5,5 0 0 1 15.5,15.5" Style="{StaticResource IconStroke}" />
+                            <Path x:Name="MutedCross" Data="M16,9 L22,15 M22,9 L16,15" Visibility="Collapsed"
+                                  Style="{StaticResource IconStroke}" />
+                        </Canvas>
+                    </Viewbox>
+                </local:IconButton>
+                <local:TrackBar x:Name="VolumeBar" Width="96" Height="20" Margin="4,0,0,0"
+                                TrackThickness="4" ThumbSize="0"
+                                TrackBrush="{StaticResource TrackBrush}" FillBrush="{StaticResource SecondaryTextBrush}"
+                                ToolTip="Громкость" />
+            </StackPanel>
+        </DockPanel>
+    </StackPanel>
 </local:FloatingWindow>

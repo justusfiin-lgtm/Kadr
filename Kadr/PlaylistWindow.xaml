@@ -17,16 +17,15 @@
                     <TextBlock x:Name="FolderText" FontSize="12" TextTrimming="CharacterEllipsis"
                                Foreground="{StaticResource SecondaryTextBrush}" />
                 </StackPanel>
-                <Button Grid.Column="1" Width="32" Height="32" Style="{StaticResource IconButton}"
-                        ToolTip="Закрыть плейлист" Click="OnCloseClick">
+                <local:IconButton Grid.Column="1" Width="32" Height="32"
+                                  Foreground="{StaticResource SecondaryTextBrush}"
+                                  ToolTip="Закрыть плейлист (L)" Click="OnCloseClick">
                     <Viewbox Width="18" Height="18">
                         <Canvas Width="24" Height="24">
-                            <Path Data="M6,6 L18,18 M18,6 L6,18" StrokeThickness="2"
-                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            <Path Data="M6,6 L18,18 M18,6 L6,18" Style="{StaticResource IconStroke}" />
                         </Canvas>
                     </Viewbox>
-                </Button>
+                </local:IconButton>
             </Grid>
         </Border>
 
