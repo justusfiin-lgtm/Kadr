@@ -6,7 +6,7 @@
         WindowStyle="None" ResizeMode="CanMinimize"
         Background="{StaticResource VideoBackgroundBrush}"
         BorderBrush="{StaticResource WindowBorderBrush}" BorderThickness="1"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual" AllowDrop="True">
     <!-- ResizeMode="CanMinimize": рамки и кнопок нет, но щелчок по кнопке на панели задач сворачивает окно. -->
     <local:VideoHost x:Name="Video" />
 </Window>

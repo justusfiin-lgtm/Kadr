@@ -26,10 +26,12 @@ public partial class VideoWindow : Window
     /// <summary>Промежуток между окнами в начальной раскладке.</summary>
     private const double WindowGap = 8;
 
-    private readonly string _filePath;
+    /// <summary>Файл, с которым запустили программу.</summary>
+    private readonly string _startPath;
     private readonly DispatcherTimer _singleClickTimer;
     private readonly ControlPanelWindow _panel = new();
-    private readonly PlaylistWindow _playlist = new();
+    private readonly PlaylistWindow _playlistWindow = new();
+    private readonly Playlist _playlist = new();
     private MpvPlayer? _player;
 
     /// <summary>Ширина картинки, делённая на высоту. До открытия видео — 16:9.</summary>
@@ -49,10 +51,9 @@ public partial class VideoWindow : Window
     public VideoWindow(string filePath)
     {
         InitializeComponent();
-        // Ссылки (http://…, av://…) mpv открывает сам — путь на диске из них делать нельзя.
-        _filePath = filePath.Contains("://") ? filePath : Path.GetFullPath(filePath);
-        Title = $"{Path.GetFileName(_filePath)} — Kadr";
-        _playlist.Folder = Path.GetDirectoryName(_filePath);
+        _startPath = filePath;
+        _playlistWindow.Attach(_playlist);
+        _playlistWindow.PlayRequested += Play;
 
         _singleClickTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(GetDoubleClickTime()) };
         _singleClickTimer.Tick += (_, _) => OnSingleClick();
@@ -73,23 +74,23 @@ public partial class VideoWindow : Window
     private void PlaceWindowsInitially()
     {
         var work = SystemParameters.WorkArea;
-        var groupWidth = Width + WindowGap + _playlist.Width;
-        var groupHeight = Math.Max(Height + WindowGap + _panel.Height, _playlist.Height);
+        var groupWidth = Width + WindowGap + _playlistWindow.Width;
+        var groupHeight = Math.Max(Height + WindowGap + _panel.Height, _playlistWindow.Height);
         Left = work.Left + Math.Max(0, (work.Width - groupWidth) / 2);
         Top = work.Top + Math.Max(0, (work.Height - groupHeight) / 2);
 
         _panel.Left = Left;
         _panel.Top = Top + Height + WindowGap;
-        _playlist.Left = Left + Width + WindowGap;
-        _playlist.Top = Top;
+        _playlistWindow.Left = Left + Width + WindowGap;
+        _playlistWindow.Top = Top;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _panel.Owner = this;
-        _playlist.Owner = this;
+        _playlistWindow.Owner = this;
         _panel.Show();
-        _playlist.Show();
+        _playlistWindow.Show();
 
         try
         {
@@ -110,19 +111,88 @@ public partial class VideoWindow : Window
 
         _player.EndFile += OnEndFile;
         _player.VideoReconfig += OnVideoReconfig;
+        _player.PropertyChanged += OnPlayerPropertyChanged;
         _player.Shutdown += Close;
+        _player.ObserveProperty("eof-reached", MpvFormat.Flag);
 
         _panel.Attach(_player);
-        _panel.PlaylistClicked += () => ToggleVisible(_playlist);
-        // «Предыдущий»/«Следующий» — этап 4 (плейлист), «Аудио»/«Субтитры» — этап 5.
+        _panel.PlaylistClicked += () => ToggleVisible(_playlistWindow);
+        _panel.PreviousClicked += () => Play(_playlist.Previous);
+        _panel.NextClicked += () => Play(_playlist.Next);
+        // «Аудио»/«Субтитры» — этап 5.
 
-        _player.LoadFile(_filePath);
+        OpenFile(_startPath);
+    }
+
+    // ---------- Что играет ----------
+
+    /// <summary>
+    /// Открыть один файл: плейлист заменяется всеми видео из его папки (без подпапок),
+    /// играет именно этот файл (CLAUDE.md, раздел 6.1).
+    /// </summary>
+    private void OpenFile(string path)
+    {
+        // Ссылки (http://…, av://…) mpv открывает сам — папки у них нет.
+        if (path.Contains("://"))
+        {
+            _playlist.Replace([path]);
+            Play(_playlist.Items[0]);
+            return;
+        }
+
+        path = Path.GetFullPath(path);
+        _playlist.Replace(VideoFiles.FolderOf(path));
+        Play(_playlist.Find(path));
+    }
+
+    /// <summary>Открыть папку целиком (со всеми подпапками) и играть с первого файла.</summary>
+    private void OpenFolder(string folder)
+    {
+        _playlist.Replace(VideoFiles.FolderTree(folder));
+        Play(_playlist.Items.FirstOrDefault());
+    }
+
+    private void Play(PlaylistItem? item)
+    {
+        if (item is null || _player is null)
+            return;
+        _playlist.Current = item;
+        Title = $"{item.Name} — Kadr";
+        _player.LoadFile(item.Path);
+    }
+
+    private void OnPlayerPropertyChanged(string name, object? value)
+    {
+        // Файл досмотрен — следующий по списку. В конце списка плеер стоит на последнем кадре.
+        if (name == "eof-reached" && value is true)
+            Play(_playlist.Next);
     }
 
     private void OnEndFile(MpvEndFileReason reason, string? error)
     {
         if (reason == MpvEndFileReason.Error)
-            ShowError($"Не удалось воспроизвести файл:\n{_filePath}\n\n{error}");
+            ShowError($"Не удалось воспроизвести файл:\n{_playlist.Current?.Path}\n\n{error}");
+    }
+
+    // ---------- Перетаскивание файла на окно видео: открыть его папку ----------
+
+    protected override void OnDragOver(DragEventArgs e)
+    {
+        base.OnDragOver(e);
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    protected override void OnDrop(DragEventArgs e)
+    {
+        base.OnDrop(e);
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] { Length: > 0 } paths)
+            return;
+        var first = paths[0];
+        if (Directory.Exists(first))
+            OpenFolder(first);
+        else if (File.Exists(first))
+            OpenFile(first);
     }
 
     private void OnVideoReconfig()
@@ -238,7 +308,15 @@ public partial class VideoWindow : Window
                 ToggleVisible(_panel);
                 break;
             case Key.L:
-                ToggleVisible(_playlist);
+                ToggleVisible(_playlistWindow);
+                break;
+            case Key.B:
+            case Key.PageDown:
+                Play(_playlist.Next);
+                break;
+            case Key.V:
+            case Key.PageUp:
+                Play(_playlist.Previous);
                 break;
             default:
                 return;
@@ -321,10 +399,10 @@ public partial class VideoWindow : Window
             _satellitesBeforeFullscreen =
             [
                 new(_panel, GetBounds(_panel.Hwnd), _panel.IsVisible),
-                new(_playlist, GetBounds(_playlist.Hwnd), _playlist.IsVisible),
+                new(_playlistWindow, GetBounds(_playlistWindow.Hwnd), _playlistWindow.IsVisible),
             ];
             _panel.Hide();
-            _playlist.Hide();
+            _playlistWindow.Hide();
 
             _windowedBounds = GetBounds(Hwnd);
             BorderThickness = new Thickness(0);
@@ -351,7 +429,7 @@ public partial class VideoWindow : Window
         _singleClickTimer.Stop();
         Hide();
         _panel.Hide();
-        _playlist.Hide();
+        _playlistWindow.Hide();
         await Task.Run(player.Dispose);
         Close();
     }
@@ -359,9 +437,9 @@ public partial class VideoWindow : Window
     private void CloseSatellites()
     {
         _panel.CloseForReal = true;
-        _playlist.CloseForReal = true;
+        _playlistWindow.CloseForReal = true;
         _panel.Close();
-        _playlist.Close();
+        _playlistWindow.Close();
     }
 
     private void ShowError(string message) =>

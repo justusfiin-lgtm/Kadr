@@ -48,6 +48,9 @@ internal sealed class MpvPlayer : IDisposable
             SetOption("osc", "no");
             SetOption("input-default-bindings", "no");
             SetOption("input-vo-keyboard", "no");
+            // Досмотрев файл, mpv останавливается на последнем кадре (а не выгружает файл);
+            // переход к следующему файлу плейлиста делает наше приложение по свойству eof-reached.
+            SetOption("keep-open", "yes");
 
             // Для отладки: если задана переменная окружения KADR_MPV_LOG, mpv пишет туда подробный журнал.
             var logFile = Environment.GetEnvironmentVariable("KADR_MPV_LOG");

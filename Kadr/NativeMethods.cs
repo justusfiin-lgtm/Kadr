@@ -66,6 +66,10 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern bool DestroyWindow(IntPtr hwnd);
 
+    /// <summary>Сравнение имён файлов как в проводнике («Серия 2» раньше «Серия 10»).</summary>
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+    public static extern int StrCmpLogicalW(string x, string y);
+
     /// <summary>Сколько миллисекунд Windows ждёт второго щелчка, чтобы засчитать двойной.</summary>
     [DllImport("user32.dll")]
     public static extern uint GetDoubleClickTime();
