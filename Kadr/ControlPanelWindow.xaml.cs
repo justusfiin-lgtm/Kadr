@@ -35,6 +35,9 @@ public partial class ControlPanelWindow : FloatingWindow
     public event Action<FrameworkElement>? SubtitlesClicked;
     public event Action? PlaylistClicked;
 
+    /// <summary>Нажат крестик «Закрыть программу».</summary>
+    public event Action? CloseProgramClicked;
+
     /// <summary>Подключить панель к плееру: она начинает показывать его время, паузу и громкость.</summary>
     internal void Attach(MpvPlayer player)
     {
@@ -148,4 +151,6 @@ public partial class ControlPanelWindow : FloatingWindow
     private void OnSubtitlesClick(object sender, RoutedEventArgs e) => SubtitlesClicked?.Invoke((FrameworkElement)sender);
 
     private void OnPlaylistClick(object sender, RoutedEventArgs e) => PlaylistClicked?.Invoke();
+
+    private void OnCloseProgramClick(object sender, RoutedEventArgs e) => CloseProgramClicked?.Invoke();
 }

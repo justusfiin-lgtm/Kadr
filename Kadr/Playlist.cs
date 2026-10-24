@@ -81,9 +81,17 @@ public sealed class Playlist : INotifyPropertyChanged
         }
     }
 
+    /// <summary>Следующий файл без перехода по кругу — для автоперехода: в конце списка — остановка.</summary>
     public PlaylistItem? Next => NeighbourOfCurrent(+1);
 
-    public PlaylistItem? Previous => NeighbourOfCurrent(-1);
+    /// <summary>
+    /// Следующий по кругу — для кнопки и клавиш: после последнего — первый.
+    /// Если играющий файл убрали из списка — первый.
+    /// </summary>
+    public PlaylistItem? NextInCircle => InCircle(+1);
+
+    /// <summary>Предыдущий по кругу: перед первым — последний.</summary>
+    public PlaylistItem? PreviousInCircle => InCircle(-1);
 
     /// <summary>Подвал окна: «12 файлов · по алфавиту»; «по алфавиту» — если порядок не меняли вручную.</summary>
     public string Summary
@@ -150,6 +158,16 @@ public sealed class Playlist : INotifyPropertyChanged
 
     public PlaylistItem? Find(string path) =>
         Items.FirstOrDefault(item => string.Equals(item.Path, path, StringComparison.OrdinalIgnoreCase));
+
+    private PlaylistItem? InCircle(int step)
+    {
+        if (Items.Count == 0)
+            return null;
+        if (Current is null)
+            return Items[0];
+        var index = (Items.IndexOf(Current) + step + Items.Count) % Items.Count;
+        return Items[index];
+    }
 
     private PlaylistItem? NeighbourOfCurrent(int step)
     {

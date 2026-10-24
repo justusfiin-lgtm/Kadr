@@ -26,6 +26,16 @@
                 <Button Style="{StaticResource TextButton}" Content="Аудио" Click="OnAudioClick" />
                 <Button Style="{StaticResource TextButton}" Content="Субтитры" Margin="8,0,0,0" Click="OnSubtitlesClick" />
                 <Button Style="{StaticResource TextButton}" Content="Плейлист" Margin="8,0,0,0" Click="OnPlaylistClick" />
+                <!-- Закрыть программу (добавлено по просьбе пользователя, 2026-10-24). -->
+                <local:IconButton Width="32" Height="32" Margin="12,0,0,0"
+                                  Foreground="{StaticResource SecondaryTextBrush}"
+                                  ToolTip="Закрыть программу (F10)" Click="OnCloseProgramClick">
+                    <Viewbox Width="18" Height="18">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="M6,6 L18,18 M18,6 L6,18" Style="{StaticResource IconStroke}" />
+                        </Canvas>
+                    </Viewbox>
+                </local:IconButton>
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">

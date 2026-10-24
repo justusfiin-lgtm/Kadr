@@ -79,6 +79,25 @@ internal sealed class MpvPlayer : IDisposable
 
     public void LoadFile(string path) => Command("loadfile", path);
 
+    /// <summary>
+    /// Выполнить действие с плеером. Ошибка mpv (перемотка файла, который перематывать нельзя;
+    /// плеер уже закрывается) — не повод ронять программу: действие просто не сработает.
+    /// </summary>
+    /// <returns>true — получилось.</returns>
+    public static bool Try(Action action)
+    {
+        try
+        {
+            action();
+            return true;
+        }
+        catch (Exception ex) when (ex is MpvException or ObjectDisposedException)
+        {
+            System.Diagnostics.Debug.WriteLine(ex.Message);
+            return false;
+        }
+    }
+
     /// <summary>Короткая надпись в углу видео на 2 секунды (рисует сам mpv — поверх картинки).</summary>
     public void ShowText(string text) => Command("show-text", text, "2000");
 

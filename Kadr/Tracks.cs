@@ -102,7 +102,7 @@ internal sealed class TrackSwitcher(MpvPlayer player)
 
     public void SelectAudio(MediaTrack track)
     {
-        if (Run(() => player.SetProperty("aid", Id(track.Id))))
+        if (MpvPlayer.Try(() => player.SetProperty("aid", Id(track.Id))))
             Osd($"Аудио: {track.Label}");
     }
 
@@ -114,12 +114,12 @@ internal sealed class TrackSwitcher(MpvPlayer player)
             var current = SubtitleTracks().FirstOrDefault(t => t.Selected);
             if (current is not null)
                 _lastSubtitleId = current.Id;
-            if (Run(() => player.SetProperty("sid", "no")))
+            if (MpvPlayer.Try(() => player.SetProperty("sid", "no")))
                 Osd("Субтитры выключены");
             return;
         }
 
-        if (Run(() => player.SetProperty("sid", Id(track.Id))))
+        if (MpvPlayer.Try(() => player.SetProperty("sid", Id(track.Id))))
             Osd($"Субтитры: {track.Label}");
     }
 
@@ -170,7 +170,7 @@ internal sealed class TrackSwitcher(MpvPlayer player)
 
     private void Shift(string property, double seconds, string caption)
     {
-        if (!Run(() => player.Command("add", property, seconds.ToString(CultureInfo.InvariantCulture))))
+        if (!MpvPlayer.Try(() => player.Command("add", property, seconds.ToString(CultureInfo.InvariantCulture))))
             return;
         if (double.TryParse(player.GetProperty(property), CultureInfo.InvariantCulture, out var value))
             Osd($"{caption}: {value.ToString("+0.0;−0.0;0.0", Russian)} с");
@@ -200,22 +200,7 @@ internal sealed class TrackSwitcher(MpvPlayer player)
         return tracks;
     }
 
-    private void Osd(string text) => Run(() => player.ShowText(text));
+    private void Osd(string text) => MpvPlayer.Try(() => player.ShowText(text));
 
     private static string Id(long id) => id.ToString(CultureInfo.InvariantCulture);
-
-    /// <summary>Выполнить действие с плеером; ошибка mpv (например, файл уже закрыт) — не повод падать.</summary>
-    private static bool Run(Action action)
-    {
-        try
-        {
-            action();
-            return true;
-        }
-        catch (Exception ex) when (ex is MpvException or ObjectDisposedException)
-        {
-            System.Diagnostics.Debug.WriteLine(ex.Message);
-            return false;
-        }
-    }
 }

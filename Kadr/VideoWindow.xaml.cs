@@ -36,6 +36,7 @@ public partial class VideoWindow : Window
     private readonly Playlist _playlist = new();
     private MpvPlayer? _player;
     private TrackSwitcher? _tracks;
+    private PlaybackActions? _actions;
 
     /// <summary>Шаг сдвига субтитров и звука, секунды.</summary>
     private const double SyncStep = 0.1;
@@ -123,12 +124,17 @@ public partial class VideoWindow : Window
 
         _panel.Attach(_player);
         _panel.PlaylistClicked += () => ToggleVisible(_playlistWindow);
-        _panel.PreviousClicked += () => Play(_playlist.Previous);
-        _panel.NextClicked += () => Play(_playlist.Next);
+        _panel.PreviousClicked += () => Play(_playlist.PreviousInCircle);
+        _panel.NextClicked += () => Play(_playlist.NextInCircle);
+        _panel.CloseProgramClicked += Close;
 
         _tracks = new TrackSwitcher(_player);
         _panel.AudioClicked += ShowAudioMenu;
         _panel.SubtitlesClicked += ShowSubtitlesMenu;
+
+        _actions = new PlaybackActions(_player);
+        // При смене файла — его имя в углу видео.
+        _player.FileLoaded += () => _actions?.Osd(_playlist.Current?.Name ?? "");
 
         OpenFile(_startPath);
     }
@@ -333,7 +339,7 @@ public partial class VideoWindow : Window
         ResizeAroundCenter(Math.Pow(WheelStep, e.Delta / 120.0));
     }
 
-    // ---------- Клавиши (полный набор — на этапе 6) ----------
+    // ---------- Горячие клавиши (CLAUDE.md, раздел 8; справка — «Горячие клавиши.txt») ----------
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
@@ -341,28 +347,69 @@ public partial class VideoWindow : Window
         HandleKey(e);
     }
 
-    /// <summary>Горячие клавиши всех трёх окон: панель и плейлист передают их сюда.</summary>
+    /// <summary>
+    /// Горячие клавиши всех трёх окон: панель и плейлист передают их сюда ещё до того,
+    /// как их получит кнопка или список (поэтому стрелки и пробел в плейлисте — тоже клавиши плеера).
+    /// </summary>
     internal void HandleKey(KeyEventArgs e)
     {
         // F10 Windows считает «системной» клавишей (как Alt), поэтому она приходит как Key.System.
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
 
-        // Буквы проверяем по Key — это физическая клавиша, поэтому в русской раскладке
-        // S — это и «Ы», Z — «Я» и т. д. С Shift работают только S, Z и X.
-        var shift = Keyboard.Modifiers == ModifierKeys.Shift;
-        if (Keyboard.Modifiers != ModifierKeys.None && !(shift && key is Key.S or Key.Z or Key.X))
+        // Клавиши проверяем по Key — это физическая клавиша, поэтому в русской раскладке
+        // S — это и «Ы», «,» — «Б», «[» — «Х» и т. д.
+        // С Shift работают только S, Z, X; с Ctrl — только A.
+        var modifiers = Keyboard.Modifiers;
+        var shift = modifiers == ModifierKeys.Shift;
+        var allowed = modifiers == ModifierKeys.None
+            || (shift && key is Key.S or Key.Z or Key.X)
+            || (modifiers == ModifierKeys.Control && key == Key.A);
+        if (!allowed)
             return;
 
         switch (key)
         {
+            // Воспроизведение
+            case Key.Space:
+                _actions?.TogglePause();
+                break;
+            case Key.OemComma:
+                _actions?.Seek(-PlaybackActions.LongSeek);
+                break;
+            case Key.OemPeriod:
+                _actions?.Seek(+PlaybackActions.LongSeek);
+                break;
+            case Key.Left:
+                _actions?.Seek(-PlaybackActions.ShortSeek);
+                break;
+            case Key.Right:
+                _actions?.Seek(+PlaybackActions.ShortSeek);
+                break;
+            case Key.OemOpenBrackets:
+                _actions?.ChangeSpeed(-PlaybackActions.SpeedStep);
+                break;
+            case Key.OemCloseBrackets:
+                _actions?.ChangeSpeed(+PlaybackActions.SpeedStep);
+                break;
+            case Key.Back:
+                _actions?.ResetSpeed();
+                break;
+
+            // Звук
+            case Key.Up:
+                _actions?.ChangeVolume(+PlaybackActions.VolumeStep);
+                break;
+            case Key.Down:
+                _actions?.ChangeVolume(-PlaybackActions.VolumeStep);
+                break;
+            case Key.M:
+                _actions?.ToggleMute();
+                break;
+            case Key.A when modifiers == ModifierKeys.Control:
+                ToggleTopmost();
+                break;
             case Key.A:
                 _tracks?.NextAudio();
-                break;
-            case Key.S when shift:
-                _tracks?.NextSubtitles();
-                break;
-            case Key.S:
-                _tracks?.ToggleSubtitles();
                 break;
             case Key.Z when shift:
                 _tracks?.ShiftAudio(-SyncStep);
@@ -370,36 +417,65 @@ public partial class VideoWindow : Window
             case Key.X when shift:
                 _tracks?.ShiftAudio(+SyncStep);
                 break;
+
+            // Субтитры
+            case Key.S when shift:
+                _tracks?.NextSubtitles();
+                break;
+            case Key.S:
+                _tracks?.ToggleSubtitles();
+                break;
             case Key.Z:
                 _tracks?.ShiftSubtitles(-SyncStep);
                 break;
             case Key.X:
                 _tracks?.ShiftSubtitles(+SyncStep);
                 break;
-            case Key.Escape when IsFullscreen:
-                ToggleFullscreen();
+
+            // Плейлист
+            case Key.B:
+            case Key.PageDown:
+                Play(_playlist.NextInCircle);
                 break;
-            case Key.F10:
-                Close();
-                break;
-            case Key.Tab:
-                ToggleVisible(_panel);
+            case Key.V:
+            case Key.PageUp:
+                Play(_playlist.PreviousInCircle);
                 break;
             case Key.L:
                 ToggleVisible(_playlistWindow);
                 break;
-            case Key.B:
-            case Key.PageDown:
-                Play(_playlist.Next);
+
+            // Окна и экран
+            case Key.F:
+                ToggleFullscreen();
                 break;
-            case Key.V:
-            case Key.PageUp:
-                Play(_playlist.Previous);
+            case Key.Escape when IsFullscreen:
+                ToggleFullscreen();
                 break;
+            case Key.Tab:
+                ToggleVisible(_panel);
+                break;
+            case Key.P:
+                _actions?.Screenshot(_playlist.Current);
+                break;
+            case Key.F10:
+                Close();
+                break;
+
             default:
                 return;
         }
         e.Handled = true;
+    }
+
+    /// <summary>Ctrl+A: все три окна этого экземпляра поверх остальных окон (или обратно).</summary>
+    private void ToggleTopmost()
+    {
+        var on = !Topmost;
+        Topmost = on;
+        _panel.Topmost = on;
+        _playlistWindow.Topmost = on;
+        _actions?.Osd(on ? "Поверх всех окон: вкл" : "Поверх всех окон: выкл");
     }
 
     private static void ToggleVisible(Window window)
@@ -504,6 +580,7 @@ public partial class VideoWindow : Window
         var player = _player;
         _player = null;
         _tracks = null;
+        _actions = null;
         _panel.Detach();
         _singleClickTimer.Stop();
         Hide();
