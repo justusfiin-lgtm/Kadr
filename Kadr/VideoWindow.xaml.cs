@@ -421,8 +421,9 @@ public partial class VideoWindow : Window
     }
 
     // ---------- Мышь ----------
-    // Щелчок без движения — пауза (в полном экране — показать/скрыть панель);
-    // с движением — перетаскивание окна; двойной щелчок — полный экран.
+    // Щелчок без движения: в оконном режиме — ничего (паузу по щелчку пользователь попросил убрать,
+    // 2026-10-24), в полном экране — показать/скрыть панель; с движением — перетаскивание окна;
+    // двойной щелчок — полный экран.
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
@@ -467,7 +468,8 @@ public partial class VideoWindow : Window
         _pressPoint = null;
         ReleaseMouseCapture();
         // Ждём, не придёт ли второй щелчок: если придёт — это двойной щелчок, а не одиночный.
-        _singleClickTimer.Start();
+        if (IsFullscreen)
+            _singleClickTimer.Start();
     }
 
     private void OnSingleClick()
@@ -475,8 +477,6 @@ public partial class VideoWindow : Window
         _singleClickTimer.Stop();
         if (IsFullscreen)
             ToggleVisible(_panel);
-        else
-            _player?.Command("cycle", "pause");
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)
