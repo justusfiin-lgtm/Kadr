@@ -11,6 +11,8 @@
     <AssemblyName>Kadr</AssemblyName>
     <RootNamespace>Kadr</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Значок программы; рисуется скриптом tools\make-icon.ps1. -->
+    <ApplicationIcon>Kadr.ico</ApplicationIcon>
     <!-- Сведения о программе (видны в свойствах Kadr.exe). -->
     <Product>Kadr</Product>
     <AssemblyTitle>Kadr — видеоплеер</AssemblyTitle>
@@ -29,6 +31,8 @@
     <None Include="..\lib\libmpv-2.dll" Link="libmpv-2.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <!-- Справка для пользователя входит в поставку. -->
     <None Update="Горячие клавиши.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Тот же значок — для окна видео (панель задач, Alt+Tab). -->
+    <Resource Include="Kadr.ico" />
   </ItemGroup>
 
   <!-- Понятная ошибка вместо падения при запуске, если движок забыли положить в lib\. -->

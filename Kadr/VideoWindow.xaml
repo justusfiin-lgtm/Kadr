@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:Kadr"
-        Title="Kadr" Width="720" Height="405"
+        Title="Kadr" Width="720" Height="405" Icon="Kadr.ico"
         WindowStyle="None" ResizeMode="CanMinimize"
         Background="{StaticResource VideoBackgroundBrush}"
         BorderBrush="{StaticResource WindowBorderBrush}" BorderThickness="1"
