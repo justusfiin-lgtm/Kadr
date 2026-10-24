@@ -32,8 +32,8 @@ public partial class VideoWindow : Window
     /// <summary>На сколько пикселей сдвигать окна нового плеера, если уже открыт другой.</summary>
     private const int InstanceOffset = 30;
 
-    /// <summary>Файл, с которым запустили программу.</summary>
-    private readonly string _startPath;
+    /// <summary>Файл, с которым запустили программу; null — запустили без файла (см. <see cref="RestoreSession"/>).</summary>
+    private readonly string? _startPath;
     private readonly DispatcherTimer _singleClickTimer;
     private readonly ControlPanelWindow _panel = new();
     private readonly PlaylistWindow _playlistWindow = new();
@@ -72,12 +72,12 @@ public partial class VideoWindow : Window
     /// <summary>Окно-спутник до полного экрана; Bounds = null — его ещё ни разу не показывали.</summary>
     private readonly record struct SavedWindow(FloatingWindow Window, RECT? Bounds, bool Visible);
 
-    public VideoWindow(string filePath)
+    public VideoWindow(string? filePath)
     {
         InitializeComponent();
         _startPath = filePath;
         _playlistWindow.Attach(_playlist);
-        _playlistWindow.PlayRequested += Play;
+        _playlistWindow.PlayRequested += item => Play(item);
 
         _panel.Host = this;
         _playlistWindow.Host = this;
@@ -251,7 +251,10 @@ public partial class VideoWindow : Window
         // core-idle = «сейчас ничего не играет» (пауза, конец файла…) — для запрета сна.
         _player.ObserveProperty("core-idle", MpvFormat.Flag);
 
-        OpenFile(_startPath);
+        if (_startPath is not null)
+            OpenFile(_startPath);
+        else
+            RestoreSession();
     }
 
     // ---------- Что играет ----------
@@ -289,18 +292,66 @@ public partial class VideoWindow : Window
         Play(_playlist.Items[0]);
     }
 
-    private void Play(PlaylistItem? item)
+    /// <param name="paused">Открыть на паузе (восстановление плейлиста при запуске).</param>
+    private void Play(PlaylistItem? item, bool paused = false)
     {
         if (item is null || _player is null)
             return;
         SaveResumePosition();
+        ShowEmptyHint(false);
 
         _playlist.Current = item;
         Title = $"{item.Name} — Kadr";
         _fileLoaded = false;
         // Этот файл уже начинали смотреть — продолжаем с того же места.
         _resumedFrom = IsUrl(item.Path) ? null : Storage.ResumePosition(item.Path);
+        if (paused)
+            MpvPlayer.Try(() => _player.SetProperty("pause", "yes"));
         _player.LoadFile(item.Path, _resumedFrom);
+    }
+
+    /// <summary>
+    /// Запуск без файла: вернуть плейлист, который был при последнем закрытии плеера, — тот же порядок,
+    /// тот же текущий файл с места остановки, на паузе. Пропавшие файлы молча убираются; если пропал
+    /// текущий — берётся следующий из оставшихся. Если не осталось ничего — пустой плеер с подсказкой.
+    /// </summary>
+    private void RestoreSession()
+    {
+        var session = Storage.LoadSession();
+        var saved = session?.Files ?? [];
+        var existing = saved.Where(path => IsUrl(path) || File.Exists(path)).ToList();
+        if (session is null || existing.Count == 0)
+        {
+            ShowEmptyHint(true);
+            return;
+        }
+
+        _playlist.Restore(existing, session.Order);
+        var from = session.Current is null
+            ? -1
+            : saved.FindIndex(path => string.Equals(path, session.Current, StringComparison.OrdinalIgnoreCase));
+        var current = from < 0 ? null : saved.Skip(from).Select(_playlist.Find).FirstOrDefault(item => item is not null);
+        Play(current ?? _playlist.Items[0], paused: true);
+    }
+
+    /// <summary>Запомнить плейлист этого плеера — при закрытии («последний закрытый побеждает»).</summary>
+    private void SaveSession() => Storage.SaveSession(new Session
+    {
+        Files = [.. _playlist.Items.Select(item => item.Path)],
+        Current = _playlist.Current?.Path,
+        Order = _playlist.Order,
+    });
+
+    /// <summary>
+    /// Пустой плеер: вместо чёрного окна — подсказка, как открыть видео. Окно mpv на это время прячется:
+    /// поверх него WPF ничего нарисовать не может.
+    /// </summary>
+    private void ShowEmptyHint(bool show)
+    {
+        EmptyHint.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        Video.Visibility = show ? Visibility.Hidden : Visibility.Visible;
+        if (show)
+            Title = "Kadr";
     }
 
     private void OnFileLoaded()
@@ -786,6 +837,7 @@ public partial class VideoWindow : Window
         // Пока плеер жив — запоминаем место просмотра, громкость и положения окон.
         SaveResumePosition();
         SaveSettings();
+        SaveSession();
         KeepAwake(false);
 
         var player = _player;

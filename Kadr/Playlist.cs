@@ -43,15 +43,15 @@ public sealed class PlaylistItem(string path) : INotifyPropertyChanged
     }
 }
 
+/// <summary>Как упорядочен плейлист — это видно в подвале окна и запоминается между запусками.</summary>
+public enum ListOrder { Alphabetical, Manual, Shuffled }
+
 /// <summary>
 /// Список файлов одного экземпляра плеера и то, какой из них играет.
 /// Только данные: открывает файлы окно видео, показывает — окно плейлиста.
 /// </summary>
 public sealed class Playlist : INotifyPropertyChanged
 {
-    /// <summary>Как сейчас упорядочен список — это видно в подвале окна.</summary>
-    private enum ListOrder { Alphabetical, Manual, Shuffled }
-
     private PlaylistItem? _current;
     private ListOrder _order = ListOrder.Alphabetical;
 
@@ -86,6 +86,9 @@ public sealed class Playlist : INotifyPropertyChanged
 
     /// <summary>Следующий файл без перехода по кругу — для автоперехода: в конце списка — остановка.</summary>
     public PlaylistItem? Next => NeighbourOfCurrent(+1);
+
+    /// <summary>Как сейчас упорядочен список.</summary>
+    public ListOrder Order => _order;
 
     /// <summary>
     /// Следующий по кругу — для кнопки и клавиш: после последнего — первый.
@@ -126,6 +129,16 @@ public sealed class Playlist : INotifyPropertyChanged
         foreach (var path in paths)
             Items.Add(new PlaylistItem(path));
         SetOrder(ListOrder.Alphabetical);
+    }
+
+    /// <summary>Вернуть сохранённый список как есть — с его порядком (восстановление при запуске).</summary>
+    public void Restore(IEnumerable<string> paths, ListOrder order)
+    {
+        Current = null;
+        Items.Clear();
+        foreach (var path in paths)
+            Items.Add(new PlaylistItem(path));
+        SetOrder(order);
     }
 
     /// <summary>Добавить в конец списка — ручной порядок не ломается.</summary>

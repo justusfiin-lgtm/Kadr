@@ -16,7 +16,7 @@
     <!-- Сведения о программе (видны в свойствах Kadr.exe). -->
     <Product>Kadr</Product>
     <AssemblyTitle>Kadr — видеоплеер</AssemblyTitle>
-    <Version>1.0.1</Version>
+    <Version>1.1.0</Version>
     <!-- Итоговая сборка: dotnet publish Kadr -c Release -o publish\Kadr (CLAUDE.md, раздел 2.1).
          Нужна установленная среда .NET 10 Desktop Runtime; файлы отладки (.pdb) в неё не кладём. -->
     <SatelliteResourceLanguages>ru</SatelliteResourceLanguages>

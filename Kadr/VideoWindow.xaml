@@ -8,5 +8,13 @@
         BorderBrush="{StaticResource WindowBorderBrush}" BorderThickness="1"
         WindowStartupLocation="Manual" AllowDrop="True">
     <!-- ResizeMode="CanMinimize": рамки и кнопок нет, но щелчок по кнопке на панели задач сворачивает окно. -->
-    <local:VideoHost x:Name="Video" />
+    <Grid>
+        <!-- Пустой плеер (нечего восстанавливать): подсказка вместо чёрного окна. -->
+        <TextBlock x:Name="EmptyHint" Visibility="Collapsed" Margin="24"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                   TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="14" LineHeight="22"
+                   Foreground="{StaticResource SecondaryTextBrush}"
+                   Text="Перетащите сюда видео или папку&#10;или щёлкните правой кнопкой → «Открыть файл…»" />
+        <local:VideoHost x:Name="Video" />
+    </Grid>
 </Window>
