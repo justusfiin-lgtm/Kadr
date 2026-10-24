@@ -15,8 +15,10 @@ using static Kadr.NativeMethods;
 namespace Kadr;
 
 /// <summary>
-/// Окно видео — главное окно экземпляра плеера. Оно владеет окнами панели управления
-/// и плейлиста: у всех трёх одна кнопка на панели задач, сворачиваются и закрываются они вместе.
+/// Окно видео — главное окно экземпляра плеера. Панель управления и плейлист — его спутники:
+/// кнопка на панели задач одна (у окна видео), поднимаются, сворачиваются и закрываются они вместе.
+/// Окно видео всегда выше спутников (кроме полного экрана и панели, поднятой клавишей H) —
+/// см. <see cref="FloatingWindow.StayBelow"/> и <see cref="BringGroupToFront"/>.
 /// </summary>
 public partial class VideoWindow : Window
 {
@@ -76,6 +78,15 @@ public partial class VideoWindow : Window
         _playlistWindow.Attach(_playlist);
         _playlistWindow.PlayRequested += Play;
 
+        _panel.Host = this;
+        _playlistWindow.Host = this;
+        // Спутники держатся под окном видео; панель может быть выше в полном экране и после H,
+        // плейлист — в полном экране.
+        _panel.StayBelow = () => IsFullscreen || _panelAboveVideo ? IntPtr.Zero : Hwnd;
+        _playlistWindow.StayBelow = () => IsFullscreen ? IntPtr.Zero : Hwnd;
+        Activated += (_, _) => BringGroupToFront();
+        StateChanged += OnStateChanged;
+
         _singleClickTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(GetDoubleClickTime()) };
         _singleClickTimer.Tick += (_, _) => OnSingleClick();
 
@@ -86,6 +97,12 @@ public partial class VideoWindow : Window
     }
 
     private IntPtr Hwnd => new WindowInteropHelper(this).Handle;
+
+    /// <summary>Панель поднята над окном видео клавишей H — до повторного H или щелчка по видео.</summary>
+    private bool _panelAboveVideo;
+
+    /// <summary>Какие спутники были видны перед сворачиванием окна видео; null — окно не свёрнуто.</summary>
+    private (bool Panel, bool Playlist)? _visibleBeforeMinimize;
 
     private bool IsFullscreen => _windowedBounds is not null;
 
@@ -186,8 +203,6 @@ public partial class VideoWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        _panel.Owner = this;
-        _playlistWindow.Owner = this;
         if (_settings.PanelWindow?.Visible ?? true)
             _panel.Show();
         if (_settings.PlaylistWindow?.Visible ?? true)
@@ -428,6 +443,13 @@ public partial class VideoWindow : Window
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {
         base.OnMouseLeftButtonDown(e);
+        // Щелчок по видео опускает панель, поднятую клавишей H, обратно под видео.
+        if (_panelAboveVideo)
+        {
+            _panelAboveVideo = false;
+            BringGroupToFront();
+        }
+
         if (e.ClickCount == 2)
         {
             // Второй щелчок двойного: отменяем отложенный одиночный.
@@ -604,6 +626,9 @@ public partial class VideoWindow : Window
             case Key.Tab:
                 ToggleVisible(_panel);
                 break;
+            case Key.H:
+                TogglePanelAboveVideo();
+                break;
             case Key.P:
                 _actions?.Screenshot(_playlist.Current);
                 break;
@@ -617,22 +642,81 @@ public partial class VideoWindow : Window
         e.Handled = true;
     }
 
-    /// <summary>Ctrl+A: все три окна этого экземпляра поверх остальных окон (или обратно).</summary>
+    /// <summary>
+    /// Ctrl+A: все три окна этого экземпляра поверх всех окон Windows (или обратно).
+    /// Внутри группы порядок прежний: видео выше спутников.
+    /// </summary>
     private void ToggleTopmost()
     {
         var on = !Topmost;
         Topmost = on;
         _panel.Topmost = on;
         _playlistWindow.Topmost = on;
+        BringGroupToFront();
         _actions?.Osd(on ? "Поверх всех окон: вкл" : "Поверх всех окон: выкл");
     }
 
-    private static void ToggleVisible(Window window)
+    /// <summary>H: поднять панель над окном видео (если скрыта — показать) или опустить обратно.</summary>
+    private void TogglePanelAboveVideo()
+    {
+        _panelAboveVideo = !_panelAboveVideo || !_panel.IsVisible;
+        if (!_panel.IsVisible)
+            _panel.Show();
+        BringGroupToFront();
+    }
+
+    private void ToggleVisible(FloatingWindow window)
     {
         if (window.IsVisible)
+        {
             window.Hide();
-        else
-            window.Show();
+            return;
+        }
+        window.Show();
+        BringGroupToFront();
+    }
+
+    /// <summary>
+    /// Поднять группу окон наверх: окно видео — над всеми, спутники — сразу под ним
+    /// (или над ним, если им сейчас можно: полный экран, панель после H). Фокус не трогается.
+    /// </summary>
+    internal void BringGroupToFront()
+    {
+        var video = Hwnd;
+        if (video == IntPtr.Zero || WindowState == WindowState.Minimized)
+            return;
+
+        SetZOrder(video, HWND_TOP);
+        foreach (var window in new FloatingWindow[] { _playlistWindow, _panel })
+        {
+            if (window.Hwnd == IntPtr.Zero || !window.IsVisible)
+                continue;
+            // Если спутнику сейчас можно быть выше видео — наверх; иначе его WndProc сам
+            // поставит его сразу под видео.
+            SetZOrder(window.Hwnd, window.StayBelow?.Invoke() == IntPtr.Zero ? HWND_TOP : video);
+        }
+    }
+
+    /// <summary>Окно видео свернули — спутники прячутся; развернули — возвращаются, какими были.</summary>
+    private void OnStateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized)
+        {
+            _visibleBeforeMinimize = (_panel.IsVisible, _playlistWindow.IsVisible);
+            _panel.Hide();
+            _playlistWindow.Hide();
+            return;
+        }
+
+        if (_visibleBeforeMinimize is { } visible)
+        {
+            _visibleBeforeMinimize = null;
+            if (visible.Panel)
+                _panel.Show();
+            if (visible.Playlist)
+                _playlistWindow.Show();
+            BringGroupToFront();
+        }
     }
 
     // ---------- Размер и полный экран ----------
@@ -683,6 +767,7 @@ public partial class VideoWindow : Window
         if (_windowedBounds is { } saved)
         {
             _windowedBounds = null;
+            _panelAboveVideo = false;
             BorderThickness = new Thickness(1);
             SetBounds(Hwnd, saved.Left, saved.Top, saved.Width, saved.Height);
             // Пока был полный экран, могло открыться видео с другими пропорциями.
@@ -697,6 +782,7 @@ public partial class VideoWindow : Window
                 else
                     window.Hide();
             }
+            BringGroupToFront();
         }
         else
         {

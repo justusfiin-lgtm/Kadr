@@ -18,8 +18,25 @@ internal static class NativeMethods
     public const uint ES_CONTINUOUS = 0x80000000;
     public const uint ES_SYSTEM_REQUIRED = 0x00000001;
     public const uint ES_DISPLAY_REQUIRED = 0x00000002;
-    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
+
+    public const int WM_WINDOWPOSCHANGING = 0x0046;
+    public static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    public static readonly IntPtr HWND_TOPMOST = new(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    /// <summary>Что Windows собирается сделать с окном (WM_WINDOWPOSCHANGING).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct WINDOWPOS
+    {
+        public IntPtr hwnd;
+        public IntPtr hwndInsertAfter;
+        public int x, y, cx, cy;
+        public uint flags;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT
@@ -48,6 +65,13 @@ internal static class NativeMethods
     /// <summary>Поставить окно в заданное место и размер (в пикселях экрана).</summary>
     public static void SetBounds(IntPtr hwnd, int x, int y, int width, int height) =>
         SetWindowPos(hwnd, IntPtr.Zero, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    /// <summary>
+    /// Переставить окно в стопке окон, не трогая размер, место и фокус: поставить сразу под
+    /// <paramref name="insertAfter"/> или наверх (<see cref="HWND_TOP"/>).
+    /// </summary>
+    public static void SetZOrder(IntPtr hwnd, IntPtr insertAfter) =>
+        SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
     /// <summary>Весь экран и рабочая область (без панели задач) монитора, где сейчас окно.</summary>
     public static (RECT Monitor, RECT WorkArea) GetMonitorOf(IntPtr hwnd)
