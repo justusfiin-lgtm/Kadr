@@ -3,8 +3,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -46,6 +44,9 @@ public partial class VideoWindow : Window
 
     /// <summary>Шаг сдвига субтитров и звука, секунды.</summary>
     private const double SyncStep = 0.1;
+
+    /// <summary>Исходный размер картинки в пикселях (для «Размер окна ▸ 100%»); null — видео ещё нет.</summary>
+    private (double Width, double Height)? _videoSize;
 
     /// <summary>Ширина картинки, делённая на высоту. До открытия видео — 16:9.</summary>
     private double _aspect = 16.0 / 9;
@@ -277,8 +278,15 @@ public partial class VideoWindow : Window
     /// <summary>Открыть папку целиком (со всеми подпапками) и играть с первого файла.</summary>
     private void OpenFolder(string folder)
     {
-        _playlist.Replace(VideoFiles.FolderTree(folder));
-        Play(_playlist.Items.FirstOrDefault());
+        var files = VideoFiles.FolderTree(folder);
+        // В папке нет видео — текущий плейлист не трогаем.
+        if (files.Count == 0)
+        {
+            _actions?.Osd("В папке нет видеофайлов");
+            return;
+        }
+        _playlist.Replace(files);
+        Play(_playlist.Items[0]);
     }
 
     private void Play(PlaylistItem? item)
@@ -327,50 +335,6 @@ public partial class VideoWindow : Window
 
     private static double? ParseNumber(string? text) =>
         double.TryParse(text, CultureInfo.InvariantCulture, out var value) ? value : null;
-
-    // ---------- Меню «Аудио» и «Субтитры» (раздел 4.5): дорожки, у выбранной — галочка ----------
-
-    private void ShowAudioMenu(FrameworkElement button)
-    {
-        if (_tracks is not { } tracks)
-            return;
-        var menu = new ContextMenu();
-        var audio = tracks.AudioTracks();
-        if (audio.Count == 0)
-            menu.Items.Add(new MenuItem { Header = "Звуковых дорожек нет", IsEnabled = false });
-        foreach (var track in audio)
-            menu.Items.Add(TrackItem(track.Label, track.Selected, () => tracks.SelectAudio(track)));
-        OpenAbove(menu, button);
-    }
-
-    private void ShowSubtitlesMenu(FrameworkElement button)
-    {
-        if (_tracks is not { } tracks)
-            return;
-        var menu = new ContextMenu();
-        var subtitles = tracks.SubtitleTracks();
-        foreach (var track in subtitles)
-            menu.Items.Add(TrackItem(track.Label, track.Selected, () => tracks.SelectSubtitles(track)));
-        if (subtitles.Count > 0)
-            menu.Items.Add(new Separator());
-        menu.Items.Add(TrackItem("Выкл", !subtitles.Any(t => t.Selected), () => tracks.SelectSubtitles(null)));
-        OpenAbove(menu, button);
-    }
-
-    private static MenuItem TrackItem(string label, bool isChecked, Action onClick)
-    {
-        // Подпись — в TextBlock: иначе «_» в названии дорожки WPF принял бы за подчёркнутую букву.
-        var item = new MenuItem { Header = new TextBlock { Text = label }, IsChecked = isChecked };
-        item.Click += (_, _) => onClick();
-        return item;
-    }
-
-    private static void OpenAbove(ContextMenu menu, FrameworkElement button)
-    {
-        menu.PlacementTarget = button;
-        menu.Placement = PlacementMode.Top;
-        menu.IsOpen = true;
-    }
 
     private void OnPlayerPropertyChanged(string name, object? value)
     {
@@ -430,6 +394,7 @@ public partial class VideoWindow : Window
             || width <= 0 || height <= 0)
             return;
 
+        _videoSize = (width, height);
         _aspect = width / height;
         if (!IsFullscreen)
             FitToAspect();

@@ -123,6 +123,14 @@ internal sealed class TrackSwitcher(MpvPlayer player)
             Osd($"Субтитры: {track.Label}");
     }
 
+    /// <summary>Подключить субтитры из файла (меню «Субтитры ▸ Загрузить файл субтитров…») и сразу включить их.</summary>
+    public void LoadSubtitles(string path)
+    {
+        Osd(MpvPlayer.Try(() => player.Command("sub-add", path, "select"))
+            ? $"Субтитры: {System.IO.Path.GetFileName(path)}"
+            : "Не удалось загрузить субтитры");
+    }
+
     /// <summary>Клавиша A: следующая звуковая дорожка по кругу.</summary>
     public void NextAudio()
     {

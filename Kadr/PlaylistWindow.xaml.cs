@@ -89,11 +89,10 @@ public partial class PlaylistWindow : FloatingWindow
 
     private void OnAddFilesClick(object sender, RoutedEventArgs e)
     {
-        var patterns = string.Join(";", VideoFiles.Extensions.Select(ext => "*." + ext));
         var dialog = new OpenFileDialog
         {
             Title = "Kadr — добавить файлы в плейлист",
-            Filter = $"Видеофайлы|{patterns}|Все файлы|*.*",
+            Filter = VideoFiles.DialogFilter,
             Multiselect = true,
         };
         if (dialog.ShowDialog(this) == true)

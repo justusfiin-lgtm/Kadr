@@ -11,6 +11,10 @@ internal static class VideoFiles
         "mpg", "mpeg", "flv", "3gp", "ogv", "vob", "divx", "rmvb",
     ];
 
+    /// <summary>Фильтр для окна «Открыть файл»: видеофайлы и все файлы.</summary>
+    public static string DialogFilter =>
+        $"Видеофайлы|{string.Join(";", Extensions.Select(ext => "*." + ext))}|Все файлы|*.*";
+
     private static readonly HashSet<string> ExtensionSet = new(Extensions, StringComparer.OrdinalIgnoreCase);
 
     public static bool IsVideo(string path) => ExtensionSet.Contains(Path.GetExtension(path).TrimStart('.'));

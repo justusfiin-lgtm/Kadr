@@ -27,11 +27,10 @@ public partial class App : Application
 
     private static string? AskForFile()
     {
-        var patterns = string.Join(";", VideoFiles.Extensions.Select(ext => "*." + ext));
         var dialog = new OpenFileDialog
         {
             Title = "Kadr — открыть видео",
-            Filter = $"Видеофайлы|{patterns}|Все файлы|*.*",
+            Filter = VideoFiles.DialogFilter,
         };
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }

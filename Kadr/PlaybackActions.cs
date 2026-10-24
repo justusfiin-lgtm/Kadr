@@ -84,7 +84,8 @@ internal sealed class PlaybackActions(MpvPlayer player)
     /// <summary>Надпись в углу видео на 2 секунды.</summary>
     public void Osd(string text) => MpvPlayer.Try(() => player.ShowText(text));
 
-    private void SetSpeed(double speed)
+    /// <summary>Поставить скорость (меню «Скорость»), с надписью на видео.</summary>
+    public void SetSpeed(double speed)
     {
         if (MpvPlayer.Try(() => player.SetProperty("speed", Invariant(speed))))
             Osd($"Скорость: {speed.ToString("0.0", Russian)}×");
