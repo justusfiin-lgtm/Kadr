@@ -11,7 +11,13 @@ internal static class NativeMethods
     public const int WS_CLIPSIBLINGS = 0x04000000;
     public const int SS_BLACKRECT = 0x00000004;
 
+    private const uint MONITOR_DEFAULTTONULL = 0;
     private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    // Для SetThreadExecutionState: «держать компьютер и экран включёнными».
+    public const uint ES_CONTINUOUS = 0x80000000;
+    public const uint ES_SYSTEM_REQUIRED = 0x00000001;
+    public const uint ES_DISPLAY_REQUIRED = 0x00000002;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
 
@@ -51,6 +57,13 @@ internal static class NativeMethods
         return (info.rcMonitor, info.rcWork);
     }
 
+    /// <summary>Попадает ли прямоугольник хоть на один монитор (монитор могли отключить).</summary>
+    public static bool IsOnAnyMonitor(int left, int top, int width, int height)
+    {
+        var rect = new RECT { Left = left, Top = top, Right = left + width, Bottom = top + height };
+        return MonitorFromRect(ref rect, MONITOR_DEFAULTTONULL) != IntPtr.Zero;
+    }
+
     /// <summary>Отключить все дочерние окна: щелчки мыши по ним уйдут родителю.</summary>
     public static void DisableChildWindows(IntPtr parent) =>
         EnumChildWindows(parent, (child, _) =>
@@ -82,6 +95,13 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromRect(ref RECT rect, uint flags);
+
+    /// <summary>Сообщить Windows, что программе нужен включённый компьютер/экран (см. ES_*).</summary>
+    [DllImport("kernel32.dll")]
+    public static extern uint SetThreadExecutionState(uint flags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);

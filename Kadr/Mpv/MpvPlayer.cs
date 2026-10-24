@@ -77,7 +77,18 @@ internal sealed class MpvPlayer : IDisposable
         _eventThread.Start();
     }
 
-    public void LoadFile(string path) => Command("loadfile", path);
+    /// <param name="startSeconds">С какой секунды начать; null — с начала.</param>
+    public void LoadFile(string path, double? startSeconds = null)
+    {
+        if (startSeconds is not { } start)
+        {
+            Command("loadfile", path);
+            return;
+        }
+        // loadfile <файл> <как> <номер> <опции>: «replace» — вместо текущего, «-1» — номер не важен.
+        Command("loadfile", path, "replace", "-1",
+            "start=" + start.ToString(CultureInfo.InvariantCulture));
+    }
 
     /// <summary>
     /// Выполнить действие с плеером. Ошибка mpv (перемотка файла, который перематывать нельзя;

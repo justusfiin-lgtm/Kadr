@@ -31,7 +31,11 @@ public class FloatingWindow : Window
     /// Окно видео ставит true, когда закрывается вся программа.</summary>
     internal bool CloseForReal { get; set; }
 
-    internal IntPtr Hwnd => new WindowInteropHelper(this).EnsureHandle();
+    /// <summary>
+    /// HWND окна; IntPtr.Zero — окно ещё ни разу не показывали.
+    /// Заранее создавать его (EnsureHandle) нельзя: окно, созданное до показа, оставалось чёрным и пустым.
+    /// </summary>
+    internal IntPtr Hwnd => new WindowInteropHelper(this).Handle;
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     {

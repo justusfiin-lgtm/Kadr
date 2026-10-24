@@ -13,6 +13,7 @@
                 <MenuItem x:Name="ClearMenuItem" Header="Очистить" Click="OnClearClick" />
                 <Separator />
                 <MenuItem x:Name="SortMenuItem" Header="Сортировать по имени" Click="OnSortClick" />
+                <MenuItem x:Name="ShuffleMenuItem" Header="Перемешать" Click="OnShuffleClick" />
             </ContextMenu>
         </DockPanel.ContextMenu>
 

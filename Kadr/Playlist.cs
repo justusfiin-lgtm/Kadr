@@ -49,8 +49,11 @@ public sealed class PlaylistItem(string path) : INotifyPropertyChanged
 /// </summary>
 public sealed class Playlist : INotifyPropertyChanged
 {
+    /// <summary>Как сейчас упорядочен список — это видно в подвале окна.</summary>
+    private enum ListOrder { Alphabetical, Manual, Shuffled }
+
     private PlaylistItem? _current;
-    private bool _isAlphabetical = true;
+    private ListOrder _order = ListOrder.Alphabetical;
 
     public Playlist()
     {
@@ -93,13 +96,23 @@ public sealed class Playlist : INotifyPropertyChanged
     /// <summary>Предыдущий по кругу: перед первым — последний.</summary>
     public PlaylistItem? PreviousInCircle => InCircle(-1);
 
-    /// <summary>Подвал окна: «12 файлов · по алфавиту»; «по алфавиту» — если порядок не меняли вручную.</summary>
+    /// <summary>
+    /// Подвал окна: «12 файлов · по алфавиту» или «12 файлов · вперемешку»;
+    /// если порядок меняли вручную — просто «12 файлов».
+    /// </summary>
     public string Summary
     {
         get
         {
             var text = $"{Items.Count} {FilesWord(Items.Count)}";
-            return _isAlphabetical && Items.Count > 1 ? text + " · по алфавиту" : text;
+            if (Items.Count < 2)
+                return text;
+            return _order switch
+            {
+                ListOrder.Alphabetical => text + " · по алфавиту",
+                ListOrder.Shuffled => text + " · вперемешку",
+                _ => text,
+            };
         }
     }
 
@@ -112,7 +125,7 @@ public sealed class Playlist : INotifyPropertyChanged
         Items.Clear();
         foreach (var path in paths)
             Items.Add(new PlaylistItem(path));
-        SetAlphabetical(true);
+        SetOrder(ListOrder.Alphabetical);
     }
 
     /// <summary>Добавить в конец списка — ручной порядок не ломается.</summary>
@@ -125,7 +138,7 @@ public sealed class Playlist : INotifyPropertyChanged
             added = true;
         }
         if (added)
-            SetAlphabetical(false);
+            SetOrder(ListOrder.Manual);
     }
 
     /// <summary>Убрать строку из списка (файл на диске не трогается). Если она играла — файл доигрывает.</summary>
@@ -140,7 +153,7 @@ public sealed class Playlist : INotifyPropertyChanged
     {
         Current = null;
         Items.Clear();
-        SetAlphabetical(true);
+        SetOrder(ListOrder.Alphabetical);
     }
 
     /// <summary>Упорядочить весь список по именам файлов «как в проводнике».</summary>
@@ -150,10 +163,19 @@ public sealed class Playlist : INotifyPropertyChanged
             .OrderBy(item => item.Name, NaturalComparer.Instance)
             .ThenBy(item => item.Path, NaturalComparer.Instance)
             .ToList();
-        Items.Clear();
-        foreach (var item in sorted)
-            Items.Add(item);
-        SetAlphabetical(true);
+        Reorder(sorted, ListOrder.Alphabetical);
+    }
+
+    /// <summary>
+    /// Перемешать список в случайном порядке. Играющий файл встаёт первым,
+    /// чтобы дальше по списку шли все остальные — уже вперемешку.
+    /// </summary>
+    public void Shuffle()
+    {
+        var others = Items.Where(item => item != Current).ToArray();
+        Random.Shared.Shuffle(others);
+        List<PlaylistItem> shuffled = Current is null ? [.. others] : [Current, .. others];
+        Reorder(shuffled, ListOrder.Shuffled);
     }
 
     public PlaylistItem? Find(string path) =>
@@ -177,9 +199,17 @@ public sealed class Playlist : INotifyPropertyChanged
         return index >= 0 && index < Items.Count ? Items[index] : null;
     }
 
-    private void SetAlphabetical(bool value)
+    private void Reorder(List<PlaylistItem> items, ListOrder order)
     {
-        _isAlphabetical = value;
+        Items.Clear();
+        foreach (var item in items)
+            Items.Add(item);
+        SetOrder(order);
+    }
+
+    private void SetOrder(ListOrder order)
+    {
+        _order = order;
         OnPropertyChanged(nameof(Summary));
     }
 

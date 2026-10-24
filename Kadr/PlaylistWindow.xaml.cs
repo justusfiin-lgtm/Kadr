@@ -84,6 +84,7 @@ public partial class PlaylistWindow : FloatingWindow
         RemoveMenuItem.IsEnabled = List.SelectedItem is not null;
         ClearMenuItem.IsEnabled = hasItems;
         SortMenuItem.IsEnabled = hasItems;
+        ShuffleMenuItem.IsEnabled = _playlist?.Items.Count > 1;
     }
 
     private void OnAddFilesClick(object sender, RoutedEventArgs e)
@@ -111,6 +112,14 @@ public partial class PlaylistWindow : FloatingWindow
     private void OnClearClick(object sender, RoutedEventArgs e) => _playlist?.Clear();
 
     private void OnSortClick(object sender, RoutedEventArgs e) => _playlist?.SortByName();
+
+    private void OnShuffleClick(object sender, RoutedEventArgs e)
+    {
+        _playlist?.Shuffle();
+        // Играющий файл теперь первый — показываем начало списка.
+        if (_playlist?.Items.Count > 0)
+            List.ScrollIntoView(_playlist.Items[0]);
+    }
 
     // ---------- Перетаскивание файлов и папок в окно: добавить в конец ----------
 

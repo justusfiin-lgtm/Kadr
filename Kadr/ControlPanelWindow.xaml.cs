@@ -122,7 +122,7 @@ public partial class ControlPanelWindow : FloatingWindow
     }
 
     /// <summary>Время в виде 01:58:03.</summary>
-    private static string FormatTime(double seconds)
+    internal static string FormatTime(double seconds)
     {
         var time = TimeSpan.FromSeconds(Math.Max(0, seconds));
         return $"{(int)time.TotalHours:00}:{time.Minutes:00}:{time.Seconds:00}";

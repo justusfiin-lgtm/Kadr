@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -28,6 +29,9 @@ public partial class VideoWindow : Window
     /// <summary>Промежуток между окнами в начальной раскладке.</summary>
     private const double WindowGap = 8;
 
+    /// <summary>На сколько пикселей сдвигать окна нового плеера, если уже открыт другой.</summary>
+    private const int InstanceOffset = 30;
+
     /// <summary>Файл, с которым запустили программу.</summary>
     private readonly string _startPath;
     private readonly DispatcherTimer _singleClickTimer;
@@ -53,7 +57,17 @@ public partial class VideoWindow : Window
     /// <summary>Где были и видны ли панель и плейлист до полноэкранного режима.</summary>
     private SavedWindow[] _satellitesBeforeFullscreen = [];
 
-    private readonly record struct SavedWindow(FloatingWindow Window, RECT Bounds, bool Visible);
+    /// <summary>Настройки, прочитанные при запуске: положения окон, громкость.</summary>
+    private readonly Settings _settings = Storage.LoadSettings();
+
+    /// <summary>Текущий файл уже загрузился — можно читать его время (для «продолжить с места»).</summary>
+    private bool _fileLoaded;
+
+    /// <summary>С какой секунды продолжили текущий файл — для надписи; null — с начала.</summary>
+    private double? _resumedFrom;
+
+    /// <summary>Окно-спутник до полного экрана; Bounds = null — его ещё ни разу не показывали.</summary>
+    private readonly record struct SavedWindow(FloatingWindow Window, RECT? Bounds, bool Visible);
 
     public VideoWindow(string filePath)
     {
@@ -66,6 +80,7 @@ public partial class VideoWindow : Window
         _singleClickTimer.Tick += (_, _) => OnSingleClick();
 
         PlaceWindowsInitially();
+        SourceInitialized += (_, _) => RestorePlacement();
         Loaded += OnLoaded;
         Closing += OnClosing;
     }
@@ -75,8 +90,9 @@ public partial class VideoWindow : Window
     private bool IsFullscreen => _windowedBounds is not null;
 
     /// <summary>
-    /// Начальная раскладка (пока позиции не запоминаются — это этап 7): видео слева,
-    /// под ним панель, справа плейлист; вся группа — по центру основного монитора.
+    /// Раскладка по умолчанию — для первого запуска (и для окна, чьё сохранённое место оказалось
+    /// за пределами экранов): видео слева, под ним панель, справа плейлист; группа — по центру
+    /// основного монитора.
     /// </summary>
     private void PlaceWindowsInitially()
     {
@@ -92,12 +108,90 @@ public partial class VideoWindow : Window
         _playlistWindow.Top = Top;
     }
 
+    /// <summary>
+    /// Поставить все три окна туда, где они были при последнем закрытии (CLAUDE.md, раздел 11).
+    /// Если уже открыт другой плеер — со сдвигом вниз-вправо, чтобы не лечь ровно поверх (раздел 10).
+    /// Окно видео ставится, когда у него уже есть HWND, но оно ещё не показано; панель и плейлист —
+    /// так же, в момент их создания при первом показе. Поэтому окна не «прыгают» на экране.
+    /// </summary>
+    private void RestorePlacement()
+    {
+        var otherPlayers = Process.GetProcessesByName("Kadr").Count(p => p.Id != Environment.ProcessId);
+        var offset = InstanceOffset * Math.Min(otherPlayers, 5);
+
+        Place(Hwnd, _settings.VideoWindow);
+        _panel.SourceInitialized += (_, _) => Place(_panel.Hwnd, _settings.PanelWindow);
+        _playlistWindow.SourceInitialized += (_, _) => Place(_playlistWindow.Hwnd, _settings.PlaylistWindow);
+
+        void Place(IntPtr hwnd, WindowPlacement? saved)
+        {
+            var bounds = GetBounds(hwnd);
+            if (saved is { Width: > 0, Height: > 0 }
+                && IsOnAnyMonitor(saved.Left, saved.Top, saved.Width, saved.Height))
+                bounds = new RECT
+                {
+                    Left = saved.Left, Top = saved.Top,
+                    Right = saved.Left + saved.Width, Bottom = saved.Top + saved.Height,
+                };
+            SetBounds(hwnd, bounds.Left + offset, bounds.Top + offset, bounds.Width, bounds.Height);
+        }
+    }
+
+    /// <summary>Запомнить положения окон и громкость — при закрытии («последний закрытый побеждает»).</summary>
+    private void SaveSettings()
+    {
+        double? volume = null;
+        if (_player is { } player)
+            MpvPlayer.Try(() => volume = ParseNumber(player.GetProperty("volume")));
+
+        // Свёрнутое окно стоит «за экраном» (−32000) — такие места не запоминаем.
+        var saveWindows = WindowState != WindowState.Minimized;
+        var video = _windowedBounds ?? GetBounds(Hwnd);
+        var panel = SatelliteState(_panel);
+        var playlist = SatelliteState(_playlistWindow);
+
+        Storage.UpdateSettings(settings =>
+        {
+            if (volume is { } v)
+                settings.Volume = v;
+            if (!saveWindows)
+                return;
+            settings.VideoWindow = ToPlacement(video, true);
+            settings.PanelWindow = Merge(settings.PanelWindow, panel);
+            settings.PlaylistWindow = Merge(settings.PlaylistWindow, playlist);
+        });
+
+        static WindowPlacement ToPlacement(RECT r, bool visible) =>
+            new() { Left = r.Left, Top = r.Top, Width = r.Width, Height = r.Height, Visible = visible };
+
+        // Окно, которое в этот раз ни разу не показывали, остаётся на прежнем месте (и скрытым).
+        static WindowPlacement? Merge(WindowPlacement? old, (RECT? Bounds, bool Visible) now) =>
+            now.Bounds is { } bounds ? ToPlacement(bounds, now.Visible)
+            : old is null ? null
+            : new() { Left = old.Left, Top = old.Top, Width = old.Width, Height = old.Height, Visible = false };
+    }
+
+    /// <summary>
+    /// Где окно-спутник и видно ли оно; в полном экране — каким было до него.
+    /// Bounds = null — окно ещё ни разу не показывали.
+    /// </summary>
+    private (RECT? Bounds, bool Visible) SatelliteState(FloatingWindow window)
+    {
+        if (IsFullscreen)
+            foreach (var saved in _satellitesBeforeFullscreen)
+                if (saved.Window == window)
+                    return (saved.Bounds, saved.Visible);
+        return window.Hwnd == IntPtr.Zero ? (null, false) : (GetBounds(window.Hwnd), window.IsVisible);
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         _panel.Owner = this;
         _playlistWindow.Owner = this;
-        _panel.Show();
-        _playlistWindow.Show();
+        if (_settings.PanelWindow?.Visible ?? true)
+            _panel.Show();
+        if (_settings.PlaylistWindow?.Visible ?? true)
+            _playlistWindow.Show();
 
         try
         {
@@ -133,8 +227,13 @@ public partial class VideoWindow : Window
         _panel.SubtitlesClicked += ShowSubtitlesMenu;
 
         _actions = new PlaybackActions(_player);
-        // При смене файла — его имя в углу видео.
-        _player.FileLoaded += () => _actions?.Osd(_playlist.Current?.Name ?? "");
+        _player.FileLoaded += OnFileLoaded;
+
+        // Громкость — общая для всех плееров, такая же, как при последнем закрытии.
+        MpvPlayer.Try(() => _player.SetProperty("volume",
+            _settings.Volume.ToString(CultureInfo.InvariantCulture)));
+        // core-idle = «сейчас ничего не играет» (пауза, конец файла…) — для запрета сна.
+        _player.ObserveProperty("core-idle", MpvFormat.Flag);
 
         OpenFile(_startPath);
     }
@@ -171,10 +270,48 @@ public partial class VideoWindow : Window
     {
         if (item is null || _player is null)
             return;
+        SaveResumePosition();
+
         _playlist.Current = item;
         Title = $"{item.Name} — Kadr";
-        _player.LoadFile(item.Path);
+        _fileLoaded = false;
+        // Этот файл уже начинали смотреть — продолжаем с того же места.
+        _resumedFrom = IsUrl(item.Path) ? null : Storage.ResumePosition(item.Path);
+        _player.LoadFile(item.Path, _resumedFrom);
     }
+
+    private void OnFileLoaded()
+    {
+        _fileLoaded = true;
+        // Имя файла в углу видео; если продолжили — и с какого места.
+        var name = _playlist.Current?.Name ?? "";
+        _actions?.Osd(_resumedFrom is { } from
+            ? $"{name}\nПродолжение с {ControlPanelWindow.FormatTime(from)}"
+            : name);
+    }
+
+    /// <summary>
+    /// Запомнить, где остановился просмотр текущего файла (CLAUDE.md, раздел 11).
+    /// Вызывается перед сменой файла и при закрытии программы.
+    /// </summary>
+    private void SaveResumePosition()
+    {
+        if (_player is not { } player || !_fileLoaded || _playlist.Current is not { } item || IsUrl(item.Path))
+            return;
+        double? position = null, duration = null;
+        MpvPlayer.Try(() =>
+        {
+            position = ParseNumber(player.GetProperty("time-pos"));
+            duration = ParseNumber(player.GetProperty("duration"));
+        });
+        if (position is { } p)
+            Storage.SaveResumePosition(item.Path, p, duration ?? 0);
+    }
+
+    private static bool IsUrl(string path) => path.Contains("://");
+
+    private static double? ParseNumber(string? text) =>
+        double.TryParse(text, CultureInfo.InvariantCulture, out var value) ? value : null;
 
     // ---------- Меню «Аудио» и «Субтитры» (раздел 4.5): дорожки, у выбранной — галочка ----------
 
@@ -222,9 +359,21 @@ public partial class VideoWindow : Window
 
     private void OnPlayerPropertyChanged(string name, object? value)
     {
-        // Файл досмотрен — следующий по списку. В конце списка плеер стоит на последнем кадре.
-        if (name == "eof-reached" && value is true)
-            Play(_playlist.Next);
+        switch (name)
+        {
+            // Файл досмотрен — следующий по списку. В конце списка плеер стоит на последнем кадре.
+            case "eof-reached" when value is true:
+                if (_playlist.Next is { } next)
+                    Play(next);
+                else
+                    SaveResumePosition(); // досмотрен до конца — место остановки забывается
+                break;
+
+            // Пока видео играет, компьютер не засыпает и не гасит экран (раздел 5).
+            case "core-idle":
+                KeepAwake(value is false);
+                break;
+        }
     }
 
     private void OnEndFile(MpvEndFileReason reason, string? error)
@@ -541,7 +690,8 @@ public partial class VideoWindow : Window
 
             foreach (var (window, bounds, visible) in _satellitesBeforeFullscreen)
             {
-                SetBounds(window.Hwnd, bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+                if (bounds is { } b)
+                    SetBounds(window.Hwnd, b.Left, b.Top, b.Width, b.Height);
                 if (visible)
                     window.Show();
                 else
@@ -552,8 +702,8 @@ public partial class VideoWindow : Window
         {
             _satellitesBeforeFullscreen =
             [
-                new(_panel, GetBounds(_panel.Hwnd), _panel.IsVisible),
-                new(_playlistWindow, GetBounds(_playlistWindow.Hwnd), _playlistWindow.IsVisible),
+                Save(_panel),
+                Save(_playlistWindow),
             ];
             _panel.Hide();
             _playlistWindow.Hide();
@@ -563,6 +713,11 @@ public partial class VideoWindow : Window
             var screen = GetMonitorOf(Hwnd).Monitor;
             SetBounds(Hwnd, screen.Left, screen.Top, screen.Width, screen.Height);
         }
+
+        static SavedWindow Save(FloatingWindow window) =>
+            window.Hwnd == IntPtr.Zero
+                ? new(window, null, false)
+                : new(window, GetBounds(window.Hwnd), window.IsVisible);
     }
 
     private async void OnClosing(object? sender, CancelEventArgs e)
@@ -577,6 +732,11 @@ public partial class VideoWindow : Window
         // Останавливаем в фоновом потоке, чтобы окно не «зависло», пока mpv завершается,
         // а потом закрываем окно уже по-настоящему.
         e.Cancel = true;
+        // Пока плеер жив — запоминаем место просмотра, громкость и положения окон.
+        SaveResumePosition();
+        SaveSettings();
+        KeepAwake(false);
+
         var player = _player;
         _player = null;
         _tracks = null;
@@ -597,6 +757,12 @@ public partial class VideoWindow : Window
         _panel.Close();
         _playlistWindow.Close();
     }
+
+    /// <summary>Не давать Windows усыплять компьютер и гасить экран (true) или снова разрешить (false).</summary>
+    private static void KeepAwake(bool on) =>
+        SetThreadExecutionState(on
+            ? ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+            : ES_CONTINUOUS);
 
     private void ShowError(string message) =>
         MessageBox.Show(this, message, "Kadr", MessageBoxButton.OK, MessageBoxImage.Error);
