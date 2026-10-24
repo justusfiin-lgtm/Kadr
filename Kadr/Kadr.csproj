@@ -31,6 +31,9 @@
     <None Include="..\lib\libmpv-2.dll" Link="libmpv-2.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <!-- Справка для пользователя входит в поставку. -->
     <None Update="Горячие клавиши.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Лицензия и сведения о сторонних компонентах (libmpv под GPL) — обязательно рядом с программой. -->
+    <None Include="..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="..\NOTICE.txt" Link="NOTICE.txt" CopyToOutputDirectory="PreserveNewest" Visible="false" />
     <!-- Тот же значок — для окна видео (панель задач, Alt+Tab). -->
     <Resource Include="Kadr.ico" />
   </ItemGroup>

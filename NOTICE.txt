@@ -1,0 +1,21 @@
+Kadr — видеоплеер для Windows.
+Copyright (C) 2026 justusfiin-lgtm
+
+Эта программа — свободное программное обеспечение: её можно распространять и изменять
+на условиях GNU General Public License версии 3 (см. файл LICENSE).
+Программа распространяется БЕЗ КАКИХ-ЛИБО ГАРАНТИЙ.
+Исходный код Kadr: https://github.com/justusfiin-lgtm/Kadr
+
+
+Сторонние компоненты
+====================
+
+libmpv-2.dll — библиотека проигрывателя mpv (https://mpv.io) вместе с FFmpeg и другими
+библиотеками, собранная проектом mpv-winbuild-cmake.
+  Лицензия: GNU GPL версии 2 или более поздней (сборка включает компоненты под GPL);
+            отдельные части — GNU LGPL.
+  Версия:   сборка mpv-dev-x86_64-20261021-git-e471496c56 (mpv, коммит e471496c56).
+  Исходный код mpv:          https://github.com/mpv-player/mpv
+  Исходный код этой версии:  https://github.com/mpv-player/mpv/tree/e471496c56
+  Скрипты сборки и исходные
+  коды всех библиотек сборки: https://github.com/shinchiro/mpv-winbuild-cmake
