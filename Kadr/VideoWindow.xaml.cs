@@ -2,6 +2,8 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -33,6 +35,10 @@ public partial class VideoWindow : Window
     private readonly PlaylistWindow _playlistWindow = new();
     private readonly Playlist _playlist = new();
     private MpvPlayer? _player;
+    private TrackSwitcher? _tracks;
+
+    /// <summary>Шаг сдвига субтитров и звука, секунды.</summary>
+    private const double SyncStep = 0.1;
 
     /// <summary>Ширина картинки, делённая на высоту. До открытия видео — 16:9.</summary>
     private double _aspect = 16.0 / 9;
@@ -119,7 +125,10 @@ public partial class VideoWindow : Window
         _panel.PlaylistClicked += () => ToggleVisible(_playlistWindow);
         _panel.PreviousClicked += () => Play(_playlist.Previous);
         _panel.NextClicked += () => Play(_playlist.Next);
-        // «Аудио»/«Субтитры» — этап 5.
+
+        _tracks = new TrackSwitcher(_player);
+        _panel.AudioClicked += ShowAudioMenu;
+        _panel.SubtitlesClicked += ShowSubtitlesMenu;
 
         OpenFile(_startPath);
     }
@@ -159,6 +168,50 @@ public partial class VideoWindow : Window
         _playlist.Current = item;
         Title = $"{item.Name} — Kadr";
         _player.LoadFile(item.Path);
+    }
+
+    // ---------- Меню «Аудио» и «Субтитры» (раздел 4.5): дорожки, у выбранной — галочка ----------
+
+    private void ShowAudioMenu(FrameworkElement button)
+    {
+        if (_tracks is not { } tracks)
+            return;
+        var menu = new ContextMenu();
+        var audio = tracks.AudioTracks();
+        if (audio.Count == 0)
+            menu.Items.Add(new MenuItem { Header = "Звуковых дорожек нет", IsEnabled = false });
+        foreach (var track in audio)
+            menu.Items.Add(TrackItem(track.Label, track.Selected, () => tracks.SelectAudio(track)));
+        OpenAbove(menu, button);
+    }
+
+    private void ShowSubtitlesMenu(FrameworkElement button)
+    {
+        if (_tracks is not { } tracks)
+            return;
+        var menu = new ContextMenu();
+        var subtitles = tracks.SubtitleTracks();
+        foreach (var track in subtitles)
+            menu.Items.Add(TrackItem(track.Label, track.Selected, () => tracks.SelectSubtitles(track)));
+        if (subtitles.Count > 0)
+            menu.Items.Add(new Separator());
+        menu.Items.Add(TrackItem("Выкл", !subtitles.Any(t => t.Selected), () => tracks.SelectSubtitles(null)));
+        OpenAbove(menu, button);
+    }
+
+    private static MenuItem TrackItem(string label, bool isChecked, Action onClick)
+    {
+        // Подпись — в TextBlock: иначе «_» в названии дорожки WPF принял бы за подчёркнутую букву.
+        var item = new MenuItem { Header = new TextBlock { Text = label }, IsChecked = isChecked };
+        item.Click += (_, _) => onClick();
+        return item;
+    }
+
+    private static void OpenAbove(ContextMenu menu, FrameworkElement button)
+    {
+        menu.PlacementTarget = button;
+        menu.Placement = PlacementMode.Top;
+        menu.IsOpen = true;
     }
 
     private void OnPlayerPropertyChanged(string name, object? value)
@@ -291,13 +344,38 @@ public partial class VideoWindow : Window
     /// <summary>Горячие клавиши всех трёх окон: панель и плейлист передают их сюда.</summary>
     internal void HandleKey(KeyEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.None)
-            return;
-
         // F10 Windows считает «системной» клавишей (как Alt), поэтому она приходит как Key.System.
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        // Буквы проверяем по Key — это физическая клавиша, поэтому в русской раскладке
+        // S — это и «Ы», Z — «Я» и т. д. С Shift работают только S, Z и X.
+        var shift = Keyboard.Modifiers == ModifierKeys.Shift;
+        if (Keyboard.Modifiers != ModifierKeys.None && !(shift && key is Key.S or Key.Z or Key.X))
+            return;
+
         switch (key)
         {
+            case Key.A:
+                _tracks?.NextAudio();
+                break;
+            case Key.S when shift:
+                _tracks?.NextSubtitles();
+                break;
+            case Key.S:
+                _tracks?.ToggleSubtitles();
+                break;
+            case Key.Z when shift:
+                _tracks?.ShiftAudio(-SyncStep);
+                break;
+            case Key.X when shift:
+                _tracks?.ShiftAudio(+SyncStep);
+                break;
+            case Key.Z:
+                _tracks?.ShiftSubtitles(-SyncStep);
+                break;
+            case Key.X:
+                _tracks?.ShiftSubtitles(+SyncStep);
+                break;
             case Key.Escape when IsFullscreen:
                 ToggleFullscreen();
                 break;
@@ -425,6 +503,7 @@ public partial class VideoWindow : Window
         e.Cancel = true;
         var player = _player;
         _player = null;
+        _tracks = null;
         _panel.Detach();
         _singleClickTimer.Stop();
         Hide();

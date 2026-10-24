@@ -28,8 +28,11 @@ public partial class ControlPanelWindow : FloatingWindow
 
     public event Action? PreviousClicked;
     public event Action? NextClicked;
-    public event Action? AudioClicked;
-    public event Action? SubtitlesClicked;
+    /// <summary>Нажата кнопка «Аудио»; передаётся сама кнопка — меню открывается над ней.</summary>
+    public event Action<FrameworkElement>? AudioClicked;
+
+    /// <summary>Нажата кнопка «Субтитры»; передаётся сама кнопка — меню открывается над ней.</summary>
+    public event Action<FrameworkElement>? SubtitlesClicked;
     public event Action? PlaylistClicked;
 
     /// <summary>Подключить панель к плееру: она начинает показывать его время, паузу и громкость.</summary>
@@ -140,9 +143,9 @@ public partial class ControlPanelWindow : FloatingWindow
 
     private void OnNextClick(object sender, RoutedEventArgs e) => NextClicked?.Invoke();
 
-    private void OnAudioClick(object sender, RoutedEventArgs e) => AudioClicked?.Invoke();
+    private void OnAudioClick(object sender, RoutedEventArgs e) => AudioClicked?.Invoke((FrameworkElement)sender);
 
-    private void OnSubtitlesClick(object sender, RoutedEventArgs e) => SubtitlesClicked?.Invoke();
+    private void OnSubtitlesClick(object sender, RoutedEventArgs e) => SubtitlesClicked?.Invoke((FrameworkElement)sender);
 
     private void OnPlaylistClick(object sender, RoutedEventArgs e) => PlaylistClicked?.Invoke();
 }

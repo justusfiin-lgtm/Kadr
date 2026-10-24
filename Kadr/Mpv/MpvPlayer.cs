@@ -51,6 +51,13 @@ internal sealed class MpvPlayer : IDisposable
             // Досмотрев файл, mpv останавливается на последнем кадре (а не выгружает файл);
             // переход к следующему файлу плейлиста делает наше приложение по свойству eof-reached.
             SetOption("keep-open", "yes");
+            // Внешние субтитры из той же папки подхватываются, даже если имя не совпадает в точности
+            // («Фильм.rus.srt» к «Фильм.mkv»); кодировка определяется сама (часто это Windows-1251).
+            SetOption("sub-auto", "fuzzy");
+            SetOption("sub-codepage", "auto");
+            // Экранные надписи (громкость, дорожки…) — в углу, шрифтом интерфейса.
+            SetOption("osd-font", "Segoe UI");
+            SetOption("osd-font-size", "32");
 
             // Для отладки: если задана переменная окружения KADR_MPV_LOG, mpv пишет туда подробный журнал.
             var logFile = Environment.GetEnvironmentVariable("KADR_MPV_LOG");
@@ -71,6 +78,9 @@ internal sealed class MpvPlayer : IDisposable
     }
 
     public void LoadFile(string path) => Command("loadfile", path);
+
+    /// <summary>Короткая надпись в углу видео на 2 секунды (рисует сам mpv — поверх картинки).</summary>
+    public void ShowText(string text) => Command("show-text", text, "2000");
 
     public void Command(params string[] args)
     {
