@@ -15,15 +15,26 @@ public partial class ControlPanelWindow : FloatingWindow
     /// <summary>Длительность файла в секундах; 0 — неизвестна (файл не открыт).</summary>
     private double _duration;
 
+    /// <summary>
+    /// Куда перематываем (секунды) и когда начали; null — перемотки нет. Пока mpv перематывает, он ещё
+    /// сообщает старое время — бегунок в это время не трогаем, иначе он отскакивает назад и обратно.
+    /// </summary>
+    private (double Target, DateTime Since)? _pendingSeek;
+
+    /// <summary>Сколько ждать, пока время плеера дойдёт до места перемотки, прежде чем снова его показывать.</summary>
+    private static readonly TimeSpan SeekSettleTime = TimeSpan.FromSeconds(1.5);
+
     public ControlPanelWindow()
     {
         InitializeComponent();
 
-        // Пока тянут — быстрая перемотка по ключевым кадрам, когда отпустили — точно в выбранное место.
+        // Тянут бегунок — быстрая перемотка по опорным кадрам (видео успевает за мышью); отпустили или
+        // просто щёлкнули — одна точная перемотка в выбранное место. Если делать при щелчке обе сразу,
+        // картинка дёргается: сначала мелькает ближайший опорный кадр, потом нужный.
         SeekBar.Dragging += value => Seek(value, "absolute+keyframes");
         SeekBar.Committed += value => Seek(value, "absolute");
-        VolumeBar.Dragging += value =>
-            Send(player => player.SetProperty("volume", (value * 100).ToString("0", CultureInfo.InvariantCulture)));
+        VolumeBar.Dragging += SetVolume;
+        VolumeBar.Committed += SetVolume;
     }
 
     public event Action? PreviousClicked;
@@ -64,10 +75,12 @@ public partial class ControlPanelWindow : FloatingWindow
         {
             case "time-pos":
                 var position = value as double? ?? 0;
+                // Пока пользователь тянет полосу или mpv ещё перематывает, бегунок и время
+                // показывают выбранное место, а не старое время плеера.
+                if (SeekBar.IsDragging || IsSeekPending(position))
+                    break;
                 ElapsedText.Text = FormatTime(position);
-                // Пока пользователь тянет полосу, бегунок слушается мыши, а не плеера.
-                if (!SeekBar.IsDragging)
-                    SeekBar.Value = _duration > 0 ? position / _duration : 0;
+                SeekBar.Value = _duration > 0 ? position / _duration : 0;
                 break;
 
             case "duration":
@@ -99,9 +112,30 @@ public partial class ControlPanelWindow : FloatingWindow
 
     private void Seek(double fraction, string mode)
     {
-        if (_duration > 0)
-            Send(player => player.Command("seek", (fraction * _duration).ToString("0.###", CultureInfo.InvariantCulture), mode));
+        if (_duration <= 0)
+            return;
+        var target = fraction * _duration;
+        ElapsedText.Text = FormatTime(target);
+        _pendingSeek = (target, DateTime.UtcNow);
+        Send(player => player.Command("seek", target.ToString("0.###", CultureInfo.InvariantCulture), mode));
     }
+
+    /// <summary>Время плеера ещё не дошло до места перемотки (и прошло не слишком много времени).</summary>
+    private bool IsSeekPending(double position)
+    {
+        if (_pendingSeek is not { } seek)
+            return false;
+        // Опорный кадр может быть на несколько секунд раньше цели — «дошли» считаем с запасом.
+        if (Math.Abs(position - seek.Target) < 1 || DateTime.UtcNow - seek.Since > SeekSettleTime)
+        {
+            _pendingSeek = null;
+            return false;
+        }
+        return true;
+    }
+
+    private void SetVolume(double fraction) =>
+        Send(player => player.SetProperty("volume", (fraction * 100).ToString("0", CultureInfo.InvariantCulture)));
 
     /// <summary>
     /// Отправить команду плееру. Ошибку mpv здесь не считаем поводом падать: например, перемотка

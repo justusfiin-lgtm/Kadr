@@ -66,10 +66,13 @@ public class TrackBar : FrameworkElement
     /// <summary>Пользователь сейчас тянет полосу — внешние обновления (время, громкость) не должны ей мешать.</summary>
     public bool IsDragging { get; private set; }
 
-    /// <summary>Значение меняется мышью (щелчок или перетаскивание).</summary>
+    /// <summary>
+    /// Полосу тянут мышью с зажатой кнопкой — промежуточные значения. При простом щелчке не вызывается:
+    /// для перемотки это важно — щелчок должен дать одну точную перемотку, а не две подряд.
+    /// </summary>
     public event Action<double>? Dragging;
 
-    /// <summary>Кнопку мыши отпустили — окончательное значение.</summary>
+    /// <summary>Кнопку мыши отпустили (после щелчка или перетаскивания) — окончательное значение.</summary>
     public event Action<double>? Committed;
 
     protected override void OnRender(DrawingContext dc)
@@ -101,14 +104,17 @@ public class TrackBar : FrameworkElement
         e.Handled = true;
         CaptureMouse();
         IsDragging = true;
+        // Бегунок сразу встаёт под мышь, а само значение сообщается только при отпускании (Committed).
         UpdateFromMouse(e);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (IsDragging)
-            UpdateFromMouse(e);
+        // WPF присылает MouseMove и без настоящего движения (например, после захвата мыши) —
+        // такие не считаем перетаскиванием.
+        if (IsDragging && UpdateFromMouse(e))
+            Dragging?.Invoke(Value);
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
@@ -132,13 +138,15 @@ public class TrackBar : FrameworkElement
         Committed?.Invoke(Value);
     }
 
-    private void UpdateFromMouse(MouseEventArgs e)
+    /// <summary>Поставить значение по положению мыши; true — значение изменилось.</summary>
+    private bool UpdateFromMouse(MouseEventArgs e)
     {
         var (start, length) = Travel();
         if (length <= 0)
-            return;
+            return false;
+        var old = Value;
         Value = (e.GetPosition(this).X - start) / length;
-        Dragging?.Invoke(Value);
+        return Value != old;
     }
 
     /// <summary>Где по горизонтали находится значение <paramref name="value"/>.</summary>
