@@ -88,6 +88,38 @@ internal static class NativeMethods
         return MonitorFromRect(ref rect, MONITOR_DEFAULTTONULL) != IntPtr.Zero;
     }
 
+    /// <summary>
+    /// Открыть папку файла в проводнике и выделить в ней сам файл (как «Открыть расположение файла»
+    /// в проводнике). Если окно этой папки уже открыто — используется оно. false — не получилось.
+    /// </summary>
+    /// <remarks>
+    /// «explorer.exe /select,…» для этого ненадёжен: проводник открывал папку, но файл не выделял.
+    /// </remarks>
+    public static bool ShowInExplorer(string file)
+    {
+        var pidl = ILCreateFromPathW(file);
+        if (pidl == IntPtr.Zero)
+            return false;
+        try
+        {
+            // Передан сам файл и 0 элементов — Windows откроет его папку и выделит этот файл.
+            return SHOpenFolderAndSelectItems(pidl, 0, null, 0) == 0;
+        }
+        finally
+        {
+            ILFree(pidl);
+        }
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr ILCreateFromPathW(string path);
+
+    [DllImport("shell32.dll")]
+    private static extern void ILFree(IntPtr pidl);
+
+    [DllImport("shell32.dll")]
+    private static extern int SHOpenFolderAndSelectItems(IntPtr folder, uint count, IntPtr[]? items, uint flags);
+
     /// <summary>Отключить все дочерние окна: щелчки мыши по ним уйдут родителю.</summary>
     public static void DisableChildWindows(IntPtr parent) =>
         EnumChildWindows(parent, (child, _) =>

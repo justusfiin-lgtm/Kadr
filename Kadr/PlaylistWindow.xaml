@@ -9,6 +9,7 @@
                 <MenuItem Header="Добавить файлы…" Click="OnAddFilesClick" />
                 <MenuItem Header="Добавить папку…" Click="OnAddFolderClick" />
                 <Separator />
+                <MenuItem x:Name="ShowInFolderMenuItem" Header="Открыть расположение файла" Click="OnShowInFolderClick" />
                 <MenuItem x:Name="RemoveMenuItem" Header="Удалить выбранный" InputGestureText="Delete" Click="OnRemoveClick" />
                 <MenuItem x:Name="ClearMenuItem" Header="Очистить" Click="OnClearClick" />
                 <Separator />

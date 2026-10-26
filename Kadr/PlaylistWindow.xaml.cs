@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -82,6 +83,8 @@ public partial class PlaylistWindow : FloatingWindow
     {
         var hasItems = _playlist?.Items.Count > 0;
         RemoveMenuItem.IsEnabled = List.SelectedItem is not null;
+        // Правый щелчок по строке выделяет её — пункт относится к этому файлу.
+        ShowInFolderMenuItem.IsEnabled = List.SelectedItem is PlaylistItem selected && FolderOf(selected.Path) is not null;
         ClearMenuItem.IsEnabled = hasItems;
         SortMenuItem.IsEnabled = hasItems;
         ShuffleMenuItem.IsEnabled = _playlist?.Items.Count > 1;
@@ -105,6 +108,25 @@ public partial class PlaylistWindow : FloatingWindow
         if (dialog.ShowDialog(this) == true)
             _playlist?.Append(VideoFiles.FolderTree(dialog.FolderName));
     }
+
+    /// <summary>
+    /// «Открыть расположение файла»: окно проводника с папкой файла, сам файл выделен
+    /// (как одноимённый пункт в проводнике). Если файла уже нет — просто его папка.
+    /// </summary>
+    private void OnShowInFolderClick(object sender, RoutedEventArgs e)
+    {
+        if (List.SelectedItem is not PlaylistItem item || FolderOf(item.Path) is not { } folder)
+            return;
+        if (File.Exists(item.Path) && NativeMethods.ShowInExplorer(item.Path))
+            return;
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
+    }
+
+    /// <summary>Существующая папка файла; null — это ссылка или папки уже нет (диск отключён и т. п.).</summary>
+    private static string? FolderOf(string path) =>
+        path.Contains("://") ? null
+        : Path.GetDirectoryName(path) is { } folder && Directory.Exists(folder) ? folder
+        : null;
 
     private void OnRemoveClick(object sender, RoutedEventArgs e) => RemoveSelected();
 
