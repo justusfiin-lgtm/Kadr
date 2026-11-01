@@ -37,6 +37,18 @@ internal sealed class PlaybackActions(MpvPlayer player)
     public void Seek(double seconds) =>
         MpvPlayer.Try(() => player.Command("seek", Invariant(seconds), "relative+exact"));
 
+    /// <summary>
+    /// Цифровой блок 0–9: перейти на <paramref name="percent"/> длительности (0 — в начало),
+    /// точно, с надписью «30% · 00:35:12».
+    /// </summary>
+    public void SeekToPercent(int percent)
+    {
+        if (ReadNumber("duration") is not { } duration || duration <= 0)
+            return;
+        if (MpvPlayer.Try(() => player.Command("seek", Invariant(percent), "absolute-percent+exact")))
+            Osd($"{percent}% · {ControlPanelWindow.FormatTime(duration * percent / 100)}");
+    }
+
     public void ChangeVolume(double delta)
     {
         var volume = Math.Clamp(Math.Round((ReadNumber("volume") ?? 100) + delta), 0, 100);

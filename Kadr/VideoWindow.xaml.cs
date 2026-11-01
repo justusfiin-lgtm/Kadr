@@ -581,6 +581,11 @@ public partial class VideoWindow : Window
             case Key.Back:
                 _actions?.ResetSpeed();
                 break;
+            // Цифровой блок: 0 — в начало, 1…9 — на 10…90% длительности (только при включённом NumLock:
+            // без него Windows присылает вместо цифр стрелки, Home, End и т. п.).
+            case >= Key.NumPad0 and <= Key.NumPad9:
+                _actions?.SeekToPercent((key - Key.NumPad0) * 10);
+                break;
 
             // Звук
             case Key.Up:
