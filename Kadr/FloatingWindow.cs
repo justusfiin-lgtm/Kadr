@@ -88,8 +88,14 @@ public class FloatingWindow : Window
         base.OnMouseLeftButtonDown(e);
         // Сюда доходят только нажатия на свободное место: кнопки, полосы и строки списка забирают их себе.
         if (e.ButtonState == MouseButtonState.Pressed)
+        {
             DragMove();
+            MovedByUser?.Invoke();
+        }
     }
+
+    /// <summary>Пользователь перетащил окно мышью.</summary>
+    internal event Action? MovedByUser;
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {

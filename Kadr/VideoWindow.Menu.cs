@@ -177,6 +177,7 @@ public partial class VideoWindow
     {
         if (_videoSize is not { } size || IsFullscreen)
             return;
+        _dockPanel = false;
         ResizeAroundCenter(size.Width * scale / GetBounds(Hwnd).Width);
     }
 
@@ -185,6 +186,7 @@ public partial class VideoWindow
     {
         if (IsFullscreen)
             return;
+        _dockPanel = false;
         var work = GetMonitorOf(Hwnd).WorkArea;
         var (width, height) = FitSize(work.Width);
         SetBounds(Hwnd,

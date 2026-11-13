@@ -102,6 +102,13 @@ public partial class VideoWindow : Window
     /// <summary>Панель поднята над окном видео клавишей H — до повторного H или щелчка по видео.</summary>
     private bool _panelAboveVideo;
 
+    /// <summary>
+    /// Панель держится под окном видео (по центру, с зазором): так она ставится при открытии и следует
+    /// за окном, пока оно подстраивается под пропорции видео. Выключается, как только пользователь сам
+    /// поменял расположение: перетащил панель или окно видео, изменил его размер.
+    /// </summary>
+    private bool _dockPanel = true;
+
     /// <summary>Какие спутники были видны перед сворачиванием окна видео; null — окно не свёрнуто.</summary>
     private (bool Panel, bool Playlist)? _visibleBeforeMinimize;
 
@@ -138,7 +145,10 @@ public partial class VideoWindow : Window
         var offset = InstanceOffset * Math.Min(otherPlayers, 5);
 
         Place(Hwnd, _settings.VideoWindow);
-        _panel.SourceInitialized += (_, _) => Place(_panel.Hwnd, _settings.PanelWindow);
+        // Панель не восстанавливается на своё старое место, а встаёт под окно видео (пожелание пользователя
+        // 2026-11-13): иначе она могла закрывать видео или оказаться на другом мониторе.
+        _panel.SourceInitialized += (_, _) => DockPanelUnderVideo();
+        _panel.MovedByUser += () => _dockPanel = false;
         _playlistWindow.SourceInitialized += (_, _) => Place(_playlistWindow.Hwnd, _settings.PlaylistWindow);
 
         void Place(IntPtr hwnd, WindowPlacement? saved)
@@ -448,7 +458,39 @@ public partial class VideoWindow : Window
         _videoSize = (width, height);
         _aspect = width / height;
         if (!IsFullscreen)
+        {
             FitToAspect();
+            if (_dockPanel)
+                DockPanelUnderVideo();
+        }
+    }
+
+    /// <summary>
+    /// Поставить панель под окно видео: по центру относительно него, с небольшим зазором, на том же
+    /// мониторе. Если ниже не хватает места — прижать к нижнему краю рабочей области экрана.
+    /// </summary>
+    private void DockPanelUnderVideo()
+    {
+        if (_panel.Hwnd == IntPtr.Zero || IsFullscreen || WindowState == WindowState.Minimized)
+            return;
+
+        // Второй проход нужен, если панель переехала на монитор с другим масштабом: Windows тогда
+        // меняет её размер в пикселях, и центр надо пересчитать уже по новой ширине.
+        for (int pass = 0; pass < 2; pass++)
+        {
+            var video = GetBounds(Hwnd);
+            var panel = GetBounds(_panel.Hwnd);
+            var work = GetMonitorOf(Hwnd).WorkArea;
+            var gap = (int)Math.Round(WindowGap * VisualTreeHelper.GetDpi(this).DpiScaleY);
+
+            var x = video.Left + (video.Width - panel.Width) / 2;
+            x = Math.Max(work.Left, Math.Min(x, work.Right - panel.Width));
+            var y = Math.Min(video.Bottom + gap, work.Bottom - panel.Height);
+            SetBounds(_panel.Hwnd, x, y, panel.Width, panel.Height);
+
+            if (GetBounds(_panel.Hwnd).Width == panel.Width)
+                break;
+        }
     }
 
     // ---------- Мышь ----------
@@ -494,7 +536,10 @@ public partial class VideoWindow : Window
         _pressPoint = null;
         ReleaseMouseCapture();
         if (!IsFullscreen)
+        {
             DragMove();
+            _dockPanel = false;
+        }
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
@@ -522,6 +567,7 @@ public partial class VideoWindow : Window
         base.OnMouseWheel(e);
         if (IsFullscreen)
             return;
+        _dockPanel = false;
         // Delta = 120 на один щелчок колёсика; тачпад присылает доли щелчка.
         ResizeAroundCenter(Math.Pow(WheelStep, e.Delta / 120.0));
     }
